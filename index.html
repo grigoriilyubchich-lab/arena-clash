@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="ru">
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <head>
 <meta charset="UTF-8">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0b1120">
 <title>Arena Clash — этап 33</title>
@@ -895,20 +895,18 @@ canvas{width:100%;height:100%;display:block;border-radius:12px;box-shadow:0 12px
 </div>
 </div>
 <script>
-// === ИНТЕГРАЦИЯ С TELEGRAM ===
+// === ИНТЕГРАЦИЯ С TELEGRAM (безопасная инициализация) ===
 const tg = window.Telegram?.WebApp;
+let tgUserName = '';   // имя применим позже, когда прогрессия загрузится
 if (tg) {
-    tg.ready();   // Сообщаем, что игра готова
-    tg.expand();  // Разворачиваем на весь экран
-    
-    // Подставляем имя игрока из Telegram
+    tg.ready();
+    tg.expand();
     const user = tg.initDataUnsafe?.user;
     if (user && user.first_name) {
-        progression.nickname = user.first_name;
-        console.log('Привет, ' + user.first_name);
+        tgUserName = user.first_name;
     }
 }
-// =============================
+// =========================================================
 /* ==================== КОНСТАНТЫ ==================== */
 const W=900,H=620,RIVER_Y=310,BRIDGE_L=250,BRIDGE_R=650;
 const ARENA={x0:40,y0:30,x1:860,y1:590};
@@ -5257,6 +5255,11 @@ function loop(now){
 
 /* ==================== СТАРТ ==================== */
 initScreens();
+// Применяем имя игрока из Telegram, когда прогрессия уже готова
+if (tgUserName) {
+    progression.nickname = tgUserName;
+    saveProgression();
+}
 mountHubTabs();setTimeout(migrateLegacyChests,400);
 soundEnabled=progression.sound!==false;
 updateSoundBtn();
