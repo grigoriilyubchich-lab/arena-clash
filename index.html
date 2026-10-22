@@ -692,7 +692,7 @@ body.inTelegram #gameScreen{padding:calc(4px + var(--tg-top,0px)) calc(4px + var
 #elixirBar{position:relative;flex:1;height:clamp(14px,4vw,18px);border-radius:10px;background:#0d1424;border:2px solid #2e4470;overflow:hidden;}
 #elixirFill{position:absolute;left:0;top:0;height:100%;width:50%;background:linear-gradient(180deg,#f08cff 0%,#c24df0 55%,#8f27c4 100%);border-radius:0 8px 8px 0;transition:width .12s linear;}
 #elixirTicks{position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(10% - 2px),rgba(8,12,24,.75) calc(10% - 2px),rgba(8,12,24,.75) 10%);pointer-events:none;}
-.crownTracker{position:absolute;left:6px;top:50%;transform:translateY(-50%);z-index:6;display:none;flex-direction:column;gap:4px;padding:5px 7px;border-radius:10px;background:rgba(8,14,30,.78);border:1px solid #3a5280;pointer-events:none;}
+.crownTracker{position:absolute;right:8px;left:auto;top:8px;transform:none;z-index:6;display:none;flex-direction:column;gap:4px;padding:5px 7px;border-radius:10px;background:rgba(8,14,30,.78);border:1px solid #3a5280;pointer-events:none;}
 .crownTracker.show{display:flex;}
 .crownTracker .ctRow{display:flex;align-items:center;gap:5px;}
 .crownTracker .ctName{font-size:9px;font-weight:900;color:#c8d6f5;width:26px;}
@@ -700,6 +700,7 @@ body.inTelegram #gameScreen{padding:calc(4px + var(--tg-top,0px)) calc(4px + var
 .crownTracker i{display:block;width:14px;height:11px;background:#46506a;clip-path:polygon(0 100%,0 25%,25% 55%,50% 0,75% 55%,100% 25%,100% 100%);opacity:.55;}
 .crownTracker i.on.me{background:#5aa8ff;opacity:1;}
 .crownTracker i.on.foe{background:#ff6b6b;opacity:1;}
+.heroIcon{height:1.45em;width:auto;vertical-align:-0.3em;pointer-events:none;-webkit-user-drag:none;user-select:none;}
 </style>
 </head>
 <body>
@@ -1023,9 +1024,11 @@ const ENEMY_DEPLOY_Y=RIVER_Y-40;
 const OPEN_LANE_Y_TOP=RIVER_Y-190;
 const OPEN_LANE_Y_BOTTOM=RIVER_Y+190;
 const ELIXIR_MAX=10,DECK_SIZE=8;
+// Tracks which Princess Tower lanes were destroyed during this battle.
 let destroyedPrincessLanes={0:{left:false,right:false},1:{left:false,right:false}};
 function resetDestroyedPrincessLanes(){destroyedPrincessLanes={0:{left:false,right:false},1:{left:false,right:false}};}
 const MAX_CARD_LEVEL=10,LEVEL_MUL=0.18;
+// Цена золота для перехода с текущего уровня на следующий.
 const UPGRADE_COSTS={1:50,2:100,3:200,4:400,5:800,6:1400,7:2500,8:4000,9:6500,10:null};
 const CARD_COPY_REQUIREMENTS={
  common:[2,4,10,20,50,100,200,400,800],
@@ -1036,6 +1039,7 @@ const CARD_COPY_REQUIREMENTS={
 const EVOLUTION_MIN_LEVEL=5;
 const EVOLUTION_CYCLES=8;
 
+/* ==================== СУНДУКИ СО СЛОТАМИ / ЭТАП 28.2 ==================== */
 const CHEST_SLOT_COUNT=4;
 const CHEST_DEFS={
  silver:{id:'silver',name:'СЕРЕБРЯНЫЙ СУНДУК',icon:'🥈',coinsMin:28,coinsMax:52,copies:2,desc:'Небольшая награда: пара копий карт и немного золота.'},
@@ -1043,6 +1047,7 @@ const CHEST_DEFS={
  magic:{id:'magic',name:'МАГИЧЕСКИЙ СУНДУК',icon:'🔮',coinsMin:140,coinsMax:228,copies:7,guaranteedRarity:'rare',desc:'Много копий и минимум одна редкая карта, если она уже открыта.'},
  legendary:{id:'legendary',name:'ЛЕГЕНДАРНЫЙ СУНДУК',icon:'👑',coinsMin:280,coinsMax:420,copies:11,guaranteedRarity:'legendary',desc:'Большая награда и карта высокой редкости, если такая уже открыта.'}
 };
+// ЭТАП 31: сундуки без таймеров. Награда выдаётся сразу; слоты оставлены только для миграции старых сохранений.
 function normalizeChestState(p){
  const old=Array.isArray(p.chestSlots)?p.chestSlots:[];
  p.chestSlots=Array.from({length:CHEST_SLOT_COUNT},(_,i)=>{const c=old[i];return c&&typeof c==='object'&&CHEST_DEFS[c.type]?{id:String(c.id||('chest_'+(i+1))),type:c.type}:null;});
@@ -1079,7 +1084,7 @@ function openChestInstant(type){
 }
 function instantRewardHtml(o){
  let h='<div class="reward" style="color:#80deea;"><span class="icon">'+o.def.icon+'</span>'+o.def.name+' открыт: 🪙 +'+o.coins+'</div>';
- for(const id of Object.keys(o.cards)){const c=CARDS[id],need=cardCopiesRequired(id);h+='<div class="reward"><span class="icon">'+c.icon+'</span>'+c.name+' ×'+o.cards[id]+' · '+Math.min(cardCopies(id),need)+'/'+need+'</div>';}
+ for(const id of Object.keys(o.cards)){const c=CARDS[id],need=cardCopiesRequired(id);h+='<div class="reward"><span class="icon">'+cardIconHtml(c)+'</span>'+c.name+' ×'+o.cards[id]+' · '+Math.min(cardCopies(id),need)+'/'+need+'</div>';}
  return h;
 }
 function showPlainPopup(title,lines,btnText){
@@ -1100,6 +1105,8 @@ function migrateLegacyChests(){
  saveProgression();checkAchievements();sfx('chest');updateMenuStats();
  showPlainPopup('🎁 Сундуки открыты',['Сундуки с таймерами убраны: теперь награды выдаются сразу после боя.','Твои '+old.length+' накопленных сундука(ов) открыты автоматически.','🪙 +'+coins+' · 🃏 +'+copies+' копий'],'ЗАБРАТЬ');
 }
+/* Этап 43: онлайн-режим выключен. Код остаётся: для возврата поставь true. */
+const ONLINE_ENABLED=false;
 function getWSUrl(){
  if(typeof location!=='undefined'&&location.protocol==='https:')return 'wss://'+location.host;
  if(typeof location!=='undefined'&&location.protocol!=='file:'&&location.host)return 'ws://'+location.host;
@@ -1207,6 +1214,7 @@ const CARDS={
  iceShaman:{id:'iceShaman',name:'Ледяной шаман',desc:'Его дальняя атака наносит урон по площади и замораживает врагов рядом с попаданием.',cost:5,hp:800,dmg:92,range:175,speed:52,atkCd:1.4,r:13,color:'#80deea',shape:'healer',count:1,splash:44,freezeSplash:1.15,icon:'🧊',rarity:'epic'},
 };
 const POOL_IDS=Object.keys(CARDS).filter(id=>id!=='golemites'&&!CARDS[id].internal);
+// Explicit air-targeting rules: being ranged or visually flying does not automatically make a card able to hit air.
 const AIR_TARGET_CARD_IDS=new Set([
  'archers','musketeer','witch','minions','babyDragon','bats','eDragon','fireDragon',
  'healer','archmage','engineer','engineerTurret','witchQueen','fireDemon','iceShaman'
@@ -1214,6 +1222,7 @@ const AIR_TARGET_CARD_IDS=new Set([
 function cardCanTargetAir(cardOrId){const id=typeof cardOrId==='string'?cardOrId:(cardOrId&&cardOrId.id);return AIR_TARGET_CARD_IDS.has(id);}
 function unitCanTarget(u,target){
  if(!target||!target.flying)return true;
+ // Towers attack both ground and air; troop/building capability is explicit.
  if(u&&u.isBuilding&&!u.cfg)return true;
  return !!(u&&u.cfg&&cardCanTargetAir(u.cfg.id));
 }
@@ -1240,6 +1249,7 @@ function nearestLegalDeployment(team,cardId,x,y){
  x=clamp(Number(x)||W/2,ARENA.x0+40,ARENA.x1-40);y=clamp(Number(y)||RIVER_Y,ARENA.y0+15,ARENA.y1-5);
  if(!c||c.spell||canDeployTroop(team,x,y,cardId))return{x,y};
  let best=null,bestD=Infinity;
+ // Search a compact grid only when the preferred point is illegal (usually the random sandbox AI).
  for(let yy=ARENA.y0+20;yy<=ARENA.y1-15;yy+=18){
   for(let xx=X_MIN;xx<=X_MAX;xx+=16){
    if(!canDeployTroop(team,xx,yy,cardId))continue;
@@ -1252,6 +1262,7 @@ function deploymentErrorText(team,x,y,cardId){
  const c=CARDS[cardId];if(c&&c.spell)return '';
  return 'НЕЛЬЗЯ РАЗМЕЩАТЬ ЗДЕСЬ';
 }
+// 43 collectible cards: 8 starters, then five new cards in each successive arena.
 const ARENA_CARD_GROUPS=[
  ['knight','archers','giant','goblins','musketeer','minipekka','skeletons','fireball'],
  ['valkyrie','bomber','hog','witch','prince'],
@@ -1270,6 +1281,7 @@ function isCardUnlocked(id){return !!CARDS[id]&&!CARDS[id].internal&&!!progressi
 let devSimulationAllCards=false;let devSimulationActive=false;let devSimulationCounts={0:0,1:0};
 function getUnlockedCardIds(){return devSimulationAllCards?POOL_IDS.filter(id=>CARDS[id]&&!CARDS[id].internal):POOL_IDS.filter(isCardUnlocked);}
 
+/* ==================== ЭТАП 21: МИНИ-СПОСОБНОСТИ КАРТ ==================== */
 const CARD_SPECIALS={
  knight:{name:'Защитная стойка',desc:'Первое полученное попадание наносит на 35% меньше урона.',type:'firstGuard'},
  archers:{name:'Прицельный залп',desc:'Каждая третья атака наносит на 28% больше урона.',type:'thirdShot'},
@@ -1335,6 +1347,8 @@ const ARENAS=[
  {id:7,name:'АРЕНА ЛЕГЕНД',req:11000,grass1:'#311e49',grass2:'#612e73',water1:'#b64a90',water2:'#ffb64d'},
 ];
 
+/* ==================== ЭТАП 30: ТРОПА ТРОФЕЕВ (данные и логика) ==================== */
+// Тропа идёт по рекорду трофеев (careerTrophies): недельный мягкий сброс рейтинга не отнимает уже открытые награды.
 const TROPHY_ROAD_END=12000;
 const ROAD_COIN_BASE=[40,80,120,165,210,255,300,360];
 const ROAD_ENTRY_CHEST=['','silver','silver','gold','gold','magic','magic','legendary'];
@@ -1392,6 +1406,7 @@ function claimRoadNode(n){
  saveProgression();checkAchievements();
  return {ok:true,got};
 }
+// ЭТАП 30.1: потолок уровня карт и башен растёт с ареной (арена 1 = ур. 3 ... арена 8 = ур. 10).
 function levelCapForArena(ai){return Math.min(MAX_CARD_LEVEL,3+Math.max(0,ai));}
 function currentArenaIndexByTrophies(){const p=trophyRoadProgress();let idx=0;ARENAS.forEach((a,i)=>{if(p>=a.req)idx=i;});return idx;}
 function autoArenaIndex(){return currentArenaIndexByTrophies();}
@@ -1471,49 +1486,39 @@ const QUEST_CHAIN=[
 ];
 const QUESTS_PER_DAY=2;
 const ACHIEVEMENT_BASE=[
- {id:'win5',name:'Первые победы',desc:'Победи 5 раз',target:5,reward:300,stat:'wins',icon:'🏅'},
- {id:'win15',name:'Ветеран',desc:'Победи 15 раз',target:15,reward:700,stat:'wins',icon:'🎖️'},
- {id:'win50',name:'Легенда арены',desc:'Победи 50 раз',target:50,reward:2500,stat:'wins',icon:'👑'},
- {id:'play20',name:'Заядлый боец',desc:'Сыграй 20 боёв',target:20,reward:400,stat:'plays',icon:'⚔️'},
- {id:'towers25',name:'Разрушитель',desc:'Снеси 25 башен',target:25,reward:600,stat:'towersDestroyed',icon:'💥'},
- {id:'coins2000',name:'Богач',desc:'Накопи 2000 монет',target:2000,reward:500,stat:'coinsEarned',icon:'💰'},
- {id:'trophies500',name:'Серебро',desc:'500 трофеев',target:500,reward:800,stat:'trophies',icon:'🥈'},
- {id:'trophies1000',name:'Золото',desc:'1000 трофеев',target:1000,reward:1500,stat:'trophies',icon:'🥇'},
- {id:'upgrade3',name:'Мастер карт',desc:'Карта до 3 ур.',target:3,reward:350,stat:'maxCardLevel',icon:'⬆️'},
- {id:'upgrade5',name:'Мастер прокачки',desc:'Карта до 5 ур.',target:5,reward:1000,stat:'maxCardLevel',icon:'⭐'},
- {id:'upgrade10',name:'Максимальный уровень',desc:'Доведи карту до 10 ур.',target:10,reward:3500,stat:'maxCardLevel',icon:'🌟'},
- {id:'evolve1',name:'Эволюционер',desc:'Эволюционируй карту',target:1,reward:800,stat:'evolutions',icon:'✨'},
- {id:'tour3',name:'Победитель',desc:'Выиграй турнир',target:1,reward:1500,stat:'tourWins',icon:'🏆'},
- {id:'online1',name:'Первый онлайн',desc:'Победа в онлайне',target:1,reward:500,stat:'onlineWins',icon:'🌐'},
- {id:'bp5',name:'Пропуск 5',desc:'5 ур. пропуска',target:5,reward:400,stat:'bpLevel',icon:'🎟️'},
- {id:'bp15',name:'Пропуск 15',desc:'15 ур. пропуска',target:15,reward:1200,stat:'bpLevel',icon:'🎟️'},
- {id:'replay1',name:'Кинозритель',desc:'Сохрани 1 реплей',target:1,reward:300,stat:'replaysSaved',icon:'🎬'},
- {id:'mine5',name:'Сапёр',desc:'Поставь 5 мин',target:5,reward:500,stat:'minesPlaced',icon:'🕳️'},
- {id:'wolf10',name:'Вожак стаи',desc:'Сыграй Волка 10 раз',target:10,reward:450,stat:'wolfPlayed',icon:'🐺'},
- {id:'archmage10',name:'Верховный маг',desc:'Сыграй Архимага 10 раз',target:10,reward:600,stat:'archmagePlayed',icon:'🔮'},
- {id:'shield5',name:'Хранитель',desc:'Примени Щит 5 раз',target:5,reward:500,stat:'shieldUsed',icon:'🛡️'},
- {id:'win3hard',name:'Гроза арены',desc:'3 победы над соперниками не слабее тебя по уровню карт',target:3,reward:1000,stat:'hardWins',icon:'💀'},
- {id:'super5',name:'Мастер супер',desc:'Примени супер 5 раз',target:5,reward:600,stat:'superUsed',icon:'💪'},
-];
-const ACH_TIER_FACTORS=[1,2,5,10,25];
+ {id:'win5',name:'Первые победы',fmt:'Победи {n} раз',targets:[5,20,60,150,400],reward:300,stat:'wins',icon:'🏅'},
+ {id:'win50',name:'Легенда арены',fmt:'Победи с тремя коронами {n} раз',targets:[10,35,90,200,450],reward:1000,stat:'threeCrownWins',icon:'👑'},
+ {id:'play20',name:'Заядлый боец',fmt:'Сыграй {n} боёв',targets:[20,60,150,400,1000],reward:400,stat:'plays',icon:'⚔️'},
+ {id:'towers25',name:'Разрушитель',fmt:'Снеси {n} башен',targets:[25,80,200,500,1200],reward:600,stat:'towersDestroyed',icon:'💥'},
+ {id:'coins2000',name:'Богач',fmt:'Накопи {n} монет',targets:[2000,5000,10000,25000,50000],reward:500,stat:'coinsEarned',icon:'💰'},
+ {id:'trophies500',name:'Охотник за трофеями',fmt:'Набери {n} трофеев',targets:[500,1000,2000,3500,5500],reward:800,stat:'trophies',icon:'🏆'},
+ {id:'upgrade3',name:'Мастер карт',fmt:'Прокачай карту до {n} уровня',targets:[3,5,7,9,10],reward:700,stat:'maxCardLevel',icon:'⬆️'},
+ {id:'evolve1',name:'Эволюционер',fmt:'Эволюционируй карт: {n}',targets:[1,2,3,5,8],reward:800,stat:'evolutions',icon:'✨'},
+ {id:'tour3',name:'Победитель турниров',fmt:'Выиграй турниров: {n}',targets:[1,3,10,25,50],reward:1500,stat:'tourWins',icon:'🥇'},
+ {id:'online1',name:'Первый онлайн',fmt:'Побед в онлайне: {n}',targets:[1,5,20,60,150],reward:500,stat:'onlineWins',icon:'🌐',online:true},
+ {id:'bp5',name:'Боевой пропуск',fmt:'Достигни {n} уровня пропуска',targets:[5,10,15,22,30],reward:400,stat:'bpLevel',icon:'🎟️'},
+ {id:'replay1',name:'Кинозритель',fmt:'Сохрани реплеев: {n}',targets:[1,5,15,30,60],reward:300,stat:'replaysSaved',icon:'🎬'},
+ {id:'mine5',name:'Сапёр',fmt:'Поставь мин: {n}',targets:[5,25,100,300,800],reward:500,stat:'minesPlaced',icon:'🕳️'},
+ {id:'wolf10',name:'Вожак стаи',fmt:'Сыграй Волка {n} раз',targets:[10,40,120,300,700],reward:450,stat:'wolfPlayed',icon:'🐺'},
+ {id:'archmage10',name:'Верховный маг',fmt:'Сыграй Архимага {n} раз',targets:[10,40,120,300,700],reward:600,stat:'archmagePlayed',icon:'🔮'},
+ {id:'shield5',name:'Хранитель',fmt:'Примени Щит {n} раз',targets:[5,25,80,200,500],reward:500,stat:'shieldUsed',icon:'🛡️'},
+ {id:'win3hard',name:'Гроза арены',fmt:'Победи сильных соперников (не слабее тебя по уровню карт): {n}',targets:[3,10,30,80,200],reward:1000,stat:'hardWins',icon:'💀'},
+ {id:'super5',name:'Мастер супер',fmt:'Примени супер {n} раз',targets:[5,25,80,200,500],reward:600,stat:'superUsed',icon:'💪'},
+].filter(a=>!a.online||ONLINE_ENABLED);
+// Пять рангов для каждой награды. Цели каждого ранга заданы вручную (targets), а текст
+// описания показывает реальную цель. ID первого ранга прежние, старые сохранения не теряются.
+const ACH_TIER_NAMES=['Бронза','Серебро','Золото','Платина','Алмаз'];
 const ACH_TIER_REWARD_FACTORS=[1,1.35,2,3.2,5];
-const ACHIEVEMENTS=ACHIEVEMENT_BASE.flatMap(a=>ACH_TIER_FACTORS.map((factor,i)=>{
- let target=Math.max(1,Math.round(a.target*factor));
- if(a.stat==='coinsEarned')target=[2000,5000,10000,25000,50000][i];
- if(a.stat==='trophies')target=[500,750,1000,1500,2500][i];
- if(a.stat==='maxCardLevel')target=[3,4,5,7,10][i];
- if(a.stat==='bpLevel')target=[5,10,15,22,30][i];
- if(a.stat==='evolutions')target=[1,2,3,5,8][i];
- return { ...a, id:i===0?a.id:a.id+'_t'+(i+1), baseId:a.id, tier:i+1,
-  name:a.name+(i===0?'':' · ступень '+(i+1)),
-  desc:i===0?a.desc:(a.desc+' · цель следующей ступени'), target,
-  reward:Math.max(25,Math.round(a.reward*ACH_TIER_REWARD_FACTORS[i]*0.3/25)*25) };
-}));
+const ACHIEVEMENTS=ACHIEVEMENT_BASE.flatMap(a=>a.targets.map((target,i)=>({
+ ...a, id:i===0?a.id:a.id+'_t'+(i+1), baseId:a.id, tier:i+1, tierName:ACH_TIER_NAMES[i], target,
+ desc:a.fmt.replace('{n}',target.toLocaleString('ru-RU')),
+ reward:Math.max(25,Math.round(a.reward*ACH_TIER_REWARD_FACTORS[i]*0.3/25)*25) })));
 const LOGIN_REWARDS=[
  {day:1,coins:50},{day:2,coins:75},{day:3,coins:125},{day:4,coins:200},
  {day:5,coins:300},{day:6,coins:450},{day:7,coins:750,upgrade:true},
 ];
 
+/* ==================== ЭТАП 17: СЕЗОННЫЙ ПРОПУСК v2 ==================== */
 const SEASON_LENGTH_DAYS=7;
 const BP_MAX_LEVEL=30;
 const BP_XP_BASE=35;
@@ -1594,6 +1599,7 @@ const LEADERBOARD_BOTS=[
  {name:'Ученик',avatar:'📖',trophies:640},
 ];
 
+/* ==================== УТИЛИТЫ ==================== */
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -1607,6 +1613,7 @@ function shuffle(a){for(let i=a.length-1;i>0;i--){const j=(Math.random()*(i+1))|
 function todayStr(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function yesterdayStr(){const d=new Date();d.setDate(d.getDate()-1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 
+/* ==================== СОБЫТИЯ КАЖДЫЕ 72 ЧАСА ==================== */
 function getCurrentEventInfo(now){
  const ts=typeof now==='number'?now:Date.now();
  const slot=Math.floor(ts/EVENT_CYCLE_MS);
@@ -1622,12 +1629,14 @@ function currentEventClaimed(){
  const info=getCurrentEventInfo();
  return !!(progression.eventClaims&&progression.eventClaims[String(info.slot)]);
 }
+/* ==================== МОДИФИКАТОР ДНЯ ==================== */
 function getTodayModifier(){
  const day=todayStr();
  let h=0;for(let i=0;i<day.length;i++)h=(h*31+day.charCodeAt(i))|0;
  return MODIFIERS[Math.abs(h)%MODIFIERS.length];
 }
 
+/* ==================== ПРОГРЕССИЯ ==================== */
 let progression=loadProgression();
 normalizeProgressionState(progression);
 if(progression.clan)ensureClanV2(progression.clan);
@@ -1681,6 +1690,7 @@ function loadProgression(){
  p.totalReplaysSaved=p.totalReplaysSaved||0;
  p.customStats=p.customStats||{minesPlaced:0,wolfPlayed:0,archmagePlayed:0,shieldUsed:0,hardWins:0,superUsed:0};
  if(p.customStats.superUsed===undefined)p.customStats.superUsed=0;
+ if(p.customStats.threeCrownWins===undefined)p.customStats.threeCrownWins=0;
  p.seasonLeaderboard=p.seasonLeaderboard&&typeof p.seasonLeaderboard==='object'?p.seasonLeaderboard:{seasonId:'',trophies:0,wins:0};
  p.ladderSeasonId=typeof p.ladderSeasonId==='string'&&/^\d{4}-W\d{2}$/.test(p.ladderSeasonId)?p.ladderSeasonId:(typeof p.seasonLeaderboard.seasonId==='string'&&/^\d{4}-W\d{2}$/.test(p.seasonLeaderboard.seasonId)?p.seasonLeaderboard.seasonId:'');
  p.seasonLeaderboardClaims=p.seasonLeaderboardClaims&&typeof p.seasonLeaderboardClaims==='object'?p.seasonLeaderboardClaims:{};
@@ -1709,6 +1719,8 @@ function loadProgression(){
  customStats:{minesPlaced:0,wolfPlayed:0,archmagePlayed:0,shieldUsed:0,hardWins:0,superUsed:0},
  careerTrophies:0,ladderPeakTrophies:0,ladderSeasonId:'',seasonLeaderboard:{seasonId:'',trophies:0,wins:0,games:0,peakTrophies:0},seasonLeaderboardClaims:{},chestSlots:[null,null,null,null],chestNextId:1,trophyRoadClaims:{}};
 }
+/* ЭТАП 29.2: миграция и защита старых/импортированных сохранений.
+   Не сбрасывает прогресс целиком из-за одного повреждённого поля. */
 function normalizeProgressionState(p){
  if(!p||typeof p!=='object'||Array.isArray(p))return p;
  const objectOr=(value,fallback={})=>value&&typeof value==='object'&&!Array.isArray(value)?value:fallback;
@@ -1767,7 +1779,7 @@ function normalizeProgressionState(p){
  p.questDate=typeof p.questDate==='string'?p.questDate:null;
  p.questStats=record(p.questStats);
  p.customStats=record(p.customStats);
- for(const stat of ['minesPlaced','wolfPlayed','archmagePlayed','shieldUsed','hardWins','superUsed'])p.customStats[stat]=intIn(p.customStats[stat],0,0,1000000000);
+ for(const stat of ['minesPlaced','wolfPlayed','archmagePlayed','shieldUsed','hardWins','superUsed','threeCrownWins'])p.customStats[stat]=intIn(p.customStats[stat],0,0,1000000000);
  p.stats=record(p.stats);p.stats.byMode=record(p.stats.byMode);p.stats.byDeck=record(p.stats.byDeck);p.stats.favCards=record(p.stats.favCards);
  p.stats.totalPlayTime=numIn(p.stats.totalPlayTime,0,0,1e12);p.stats.bestWinStreak=intIn(p.stats.bestWinStreak,0,0,1000000000);
  p.settings=record(p.settings);
@@ -1807,7 +1819,8 @@ function normalizeProgressionState(p){
  return p;
 }
 
-function saveProgression(){try{normalizeChestState(progression);localStorage.setItem('arenaClash_v15_prog',JSON.stringify(progression));}catch(e){}}
+function saveProgression(){try{normalizeChestState(progression);localStorage.setItem('arenaClash_v15_prog',JSON.stringify(progression));}catch(e){}
+ if(typeof cloudScheduleSync==='function')cloudScheduleSync();}
 function cardLevel(id){return clamp(Math.floor(Number(progression.cards[id])||1),1,MAX_CARD_LEVEL);}
 function cardMulForLevel(level){const lv=clamp(Math.floor(Number(level)||1),1,MAX_CARD_LEVEL);return 1+Math.min(4,lv-1)*0.18+Math.max(0,lv-5)*0.10;}
 function cardMul(id){return cardMulForLevel(cardLevel(id));}
@@ -1838,6 +1851,7 @@ function upgradeCardWithCopies(id){
  if(have<need)return {ok:false,reason:'copies',need,have};if(progression.coins<cost)return {ok:false,reason:'gold',cost};
  progression.coins-=cost;progression.cardCopies[id]=have-need;progression.cards[id]=cardLevel(id)+1;saveProgression();checkAchievements();return {ok:true,level:cardLevel(id)};
 }
+// ЭТАП 32: соперник подбирается по трофеям (как в Clash Royale), выбора сложности нет.
 const MATCH_TROPHY_WIN=30,MATCH_TROPHY_LOSE=25,MATCH_TROPHY_SPAN=12000,MATCH_LEVEL_DIV=1700;
 function buildMatchProfile(){
  const T=Math.max(0,Number(progression.trophies)||0),s=clamp(T/MATCH_TROPHY_SPAN,0,1),lerp=function(a,b){return a+(b-a)*s;};
@@ -1868,6 +1882,7 @@ function addXp(n){progression.xp+=n;while(progression.xp>=xpForLevel(progression
 function getMaxCardLevel(){let m=1;for(const k in progression.cards)if(progression.cards[k]>m)m=progression.cards[k];return m;}
 function getWinRate(){const t=progression.wins+progression.losses;return t===0?0:Math.round((progression.wins/t)*100);}
 
+/* ==================== ЗАДАНИЯ И ВХОД ==================== */
 function refreshQuestsIfNeeded(){
  const today=todayStr();
  if(progression.questDate!==today){
@@ -1920,7 +1935,7 @@ function checkLogin(){
  let msg='<div class="reward"><span class="icon">🪙</span>+'+r.coins+'</div>';
  progression.coins+=r.coins;progression.totalCoinsEarned+=r.coins;
  if(r.upgrade){
- const drops=grantRandomCardCopies(3);let extra=0;for(const drop of drops){if(drop.id)msg+='<div class="reward"><span class="icon">'+CARDS[drop.id].icon+'</span>Копия: '+CARDS[drop.id].name+'</div>';else extra+=drop.coins||0;}if(extra){progression.coins+=extra;progression.totalCoinsEarned+=extra;msg+='<div class="reward"><span class="icon">🪙</span>+'+extra+'</div>';}
+ const drops=grantRandomCardCopies(3);let extra=0;for(const drop of drops){if(drop.id)msg+='<div class="reward"><span class="icon">'+cardIconHtml(CARDS[drop.id])+'</span>Копия: '+CARDS[drop.id].name+'</div>';else extra+=drop.coins||0;}if(extra){progression.coins+=extra;progression.totalCoinsEarned+=extra;msg+='<div class="reward"><span class="icon">🪙</span>+'+extra+'</div>';}
  }
  saveProgression();showLoginPopup(progression.streak,msg);return true;
 }
@@ -1932,6 +1947,7 @@ function showLoginPopup(streak,msgHtml){
  ov.querySelector('#loginClose').addEventListener('click',function(){sfx('chest');ov.remove();updateMenuStats();});
 }
 
+/* ==================== МАГАЗИН КАРТ ДНЯ ==================== */
 function refreshDailyCardShop(){
  const today=todayStr();
  if(progression.dailyCardShop&&progression.dailyCardShop.date===today)return;
@@ -1951,6 +1967,7 @@ function buyDailyCard(item,idx){
  saveProgression();sfx('upgrade');checkAchievements();renderShop();updateMenuStats();
 }
 
+/* ==================== РЕПЛЕИ ==================== */
 let currentReplay=null;let replayEvents=[];let replayState='idle';let replayStartTime=0;let replayPlayTime=0;
 function startReplayRecording(){replayEvents=[];replayState=sandboxActive?'idle':'recording';replayStartTime=performance.now();}
 function recordReplayEvent(type,data){
@@ -2041,7 +2058,8 @@ function updateBattlePhysics(dt){
  }else if(p.kind==='spell'){
  p.t+=dt;
  if(p.t>=p.dur){
- if(p.spellId==='lightning'){lightningFx.push({points:pickLightningTargets(p.tx,p.ty,p.team,p.splash),t:0,life:0.6});applyLightning(p);}
+ spellImpactFx(p);
+  if(p.spellId==='lightning'){lightningFx.push({points:pickLightningTargets(p.tx,p.ty,p.team,p.splash),t:0,life:0.6});applyLightning(p);}
  else if(p.spellId==='shield'){shieldArea(p.tx,p.ty,p.splash,p.team,p.shieldDur);}
  else if(p.spawnId){const sc=CARDS[p.spawnId];for(let i=0;i<p.spawnCount;i++){const a=(i/p.spawnCount)*Math.PI*2;units.push(makeUnit(sc,p.team,p.tx+Math.cos(a)*24,p.ty+Math.sin(a)*24));}}
  else if(p.freeze){freezeArea(p.tx,p.ty,p.splash,p.team,p.freeze);}
@@ -2055,6 +2073,7 @@ function updateBattlePhysics(dt){
  towers=towers.filter(t=>!(t.dead&&t.dyingTimer<=0));
 }
 
+/* ==================== КЛАНЫ ==================== */
 function generateClan(){
  const name=CLAN_NAMES[(Math.random()*CLAN_NAMES.length)|0];
  const tag=name.split(' ').map(w=>w[0]).join('').toUpperCase();
@@ -2079,12 +2098,13 @@ function claimClanChest(){
  renderClanScreen();updateMenuStats();
 }
 function checkMegaChest(){
+ // Mega chest is claimed only from the shop: never schedule a modal over a newly started match.
  if(progression.winStreak<3||progression.lastMegaChest===todayStr())return false;
  progression.lastMegaChest=todayStr();
  const coins=200;progression.coins+=coins;progression.totalCoinsEarned+=coins;
  const drops=grantRandomCardCopies(5);
  let msg='<div class="reward"><span class="icon">🎁</span>+'+coins+' 🪙</div>';
- for(const drop of drops){if(drop.id)msg+='<div class="reward"><span class="icon">'+CARDS[drop.id].icon+'</span>Копия: '+CARDS[drop.id].name+' ('+cardCopies(drop.id)+')</div>';else msg+='<div class="reward"><span class="icon">🪙</span>+'+drop.coins+' за максимальные карты</div>';}
+ for(const drop of drops){if(drop.id)msg+='<div class="reward"><span class="icon">'+cardIconHtml(CARDS[drop.id])+'</span>Копия: '+CARDS[drop.id].name+' ('+cardCopies(drop.id)+')</div>';else msg+='<div class="reward"><span class="icon">🪙</span>+'+drop.coins+' за максимальные карты</div>';}
  saveProgression();sfx('chest');
  const ov=document.createElement('div');ov.className='screen';ov.style.background='rgba(5,9,20,.88)';ov.style.zIndex='100';
  ov.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:30px;border-radius:20px;background:linear-gradient(180deg,#8a6a2a,#4d3a10);border:3px solid #ffd54f;max-width:90vw;max-height:85dvh;overflow:auto;"><div style="font-size:52px;">🎁</div><div style="font-size:24px;font-weight:900;color:#ffd54f;">МЕГА-СУНДУК</div><div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;padding:8px;">'+msg+'</div><button class="btn" id="megaClose">ЗАБРАТЬ</button></div>';
@@ -2093,6 +2113,7 @@ function checkMegaChest(){
  return true;
 }
 
+/* ==================== КОЛОДА ==================== */
 const DEFAULT_DECK=['knight','archers','giant','goblins','musketeer','minipekka','skeletons','fireball'];
 function normalizeDeckIds(raw){
  const unlocked=new Set(getUnlockedCardIds());const deck=[];
@@ -2106,6 +2127,7 @@ function loadDeck(){
  try{const s=localStorage.getItem('arenaClash_v15_deck');if(s){const arr=JSON.parse(s);if(Array.isArray(arr))return normalizeDeckIds(arr);}}catch(e){}
  return normalizeDeckIds(DEFAULT_DECK);
 }
+// Repair all saved deck slots after DEFAULT_DECK and normalizeDeckIds are initialized.
 progression.deckSlots=Array.isArray(progression.deckSlots)?progression.deckSlots.slice(0,3):[null,null,null];
 while(progression.deckSlots.length<3)progression.deckSlots.push(null);
 progression.deckSlots=progression.deckSlots.map(slot=>Array.isArray(slot)?normalizeDeckIds(slot):null);
@@ -2115,6 +2137,7 @@ if(progression.deckSlots[progression.activeDeck])playerDeckIds=normalizeDeckIds(
 else progression.deckSlots[progression.activeDeck]=playerDeckIds.slice();
 function saveDeck(){try{localStorage.setItem('arenaClash_v15_deck',JSON.stringify(normalizeDeckIds(playerDeckIds)));}catch(e){}}
 
+/* ==================== ЭТАП 17: BP/СЕЗОНЫ ==================== */
 function bpXpForLevel(lv){return BP_XP_BASE+(lv-1)*BP_XP_STEP;}
 function addBpXp(n){
  if(!Number.isFinite(n)||n<=0)return;
@@ -2193,19 +2216,14 @@ function purchaseBpPremium(tier){
  tier=tier||'premium';
  if(tier==='premiumPlus'){
   if(progression.bpPremiumPlus){alert('Премиум+ уже активен.');return;}
-  const price=progression.bpPremium?BP_PREMIUM_PLUS_PRICE-BP_PREMIUM_PRICE:BP_PREMIUM_PLUS_PRICE;
-  if(progression.coins<price){alert('Недостаточно монет.');return;}
-  if(!confirm('Открыть премиум+ за '+price+' монет? '+(progression.bpPremium?'Будет оплачена только разница.':'Также откроется обычная премиум-линия.')))return;
-  progression.coins-=price;progression.bpPremium=true;progression.bpPremiumPlus=true;
+  starsBuy('bp_plus');
  }else{
   if(progression.bpPremium){alert('Премиум уже куплен.');return;}
-  if(progression.coins<BP_PREMIUM_PRICE){alert('Недостаточно монет.');return;}
-  if(!confirm('Купить премиум за '+BP_PREMIUM_PRICE+' монет?'))return;
-  progression.coins-=BP_PREMIUM_PRICE;progression.bpPremium=true;
+  starsBuy('bp_premium');
  }
- saveProgression();sfx('chest');renderBpScreen();updateMenuStats();
 }
 
+/* ==================== СТАТИСТИКА ==================== */
 function recordGameStats(won,draw,mode){
  const s=progression.stats;
  if(!s.byMode[mode])s.byMode[mode]={wins:0,losses:0,draws:0};
@@ -2215,6 +2233,7 @@ function recordGameStats(won,draw,mode){
  saveProgression();
 }
 
+/* ==================== ЭКСПОРТ / ИМПОРТ ==================== */
 function exportProgression(){
  try{
  const json=JSON.stringify(progression);
@@ -2258,6 +2277,9 @@ function importProgression(){
  }catch(e){alert('Ошибка импорта: '+e.message);}
 }
 
+/* ==================== ЗВУК 2.0 (этап 42) ==================== */
+// Всё синтезируется в WebAudio: мягкие щипковые и колокольные тона, шумовые «пш» вместо пил и квадратов,
+// общий компрессор и небольшая реверберация. Музыка генерируется на лету (без файлов и лицензий).
 let AC=null,soundEnabled=true,AG=null,activeVoices=0;
 const sfxLastAt={};
 const SFX_MIN_GAP={hit:90,arrow:80,click:30,deploy:40,emote:250,spell:80};
@@ -2301,6 +2323,7 @@ function routeVoice(node,o){
  last.connect(bus);
  if(o.rev){const s=AG.ctx.createGain();s.gain.value=o.rev;last.connect(s);s.connect(AG.revSend);}
 }
+// щипковый тон: несколько гармоник через фильтр, мягкая атака, плавный спад
 function pluck(o){
  if(!AG||activeVoices>56)return;const ctx=AG.ctx,t=atTime(o),dur=o.dur||0.4,vol=o.vol===undefined?0.15:o.vol,f=Math.max(30,Math.min(6000,o.f||440));
  const out=ctx.createGain(),lp=ctx.createBiquadFilter();lp.type='lowpass';lp.Q.value=0.6;
@@ -2310,6 +2333,7 @@ function pluck(o){
  for(const p of parts){const osc=ctx.createOscillator();osc.type=o.type||'triangle';osc.frequency.value=f*p[0];osc.detune.value=(Math.random()-0.5)*6;const g=ctx.createGain();g.gain.value=p[1];osc.connect(g);g.connect(lp);osc.start(t);osc.stop(t+dur+0.05);voiceStart(osc);}
  lp.connect(out);routeVoice(out,o);
 }
+// колокольчик: неполные гармоники с разным временем затухания
 function bell(o){
  if(!AG||activeVoices>56)return;const ctx=AG.ctx,t=atTime(o),dur=o.dur||1,vol=o.vol===undefined?0.08:o.vol,f=Math.max(100,Math.min(5000,o.f||880));
  const out=ctx.createGain();out.gain.value=1;
@@ -2320,6 +2344,7 @@ function bell(o){
  });
  routeVoice(out,o);
 }
+// мягкий «бум»: синус с падением высоты
 function thump(o){
  if(!AG||activeVoices>56)return;const ctx=AG.ctx,t=atTime(o),dur=o.dur||0.2,vol=o.vol===undefined?0.2:o.vol;
  const osc=ctx.createOscillator(),g=ctx.createGain(),lp=ctx.createBiquadFilter();osc.type='sine';
@@ -2328,6 +2353,7 @@ function thump(o){
  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(0.0002,vol),t+0.008);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
  osc.connect(lp);lp.connect(g);osc.start(t);osc.stop(t+dur+0.05);voiceStart(osc);routeVoice(g,o);
 }
+// плавный сдвиг высоты (синус): «блуп», «зап»
 function glide(o){
  if(!AG||activeVoices>56)return;const ctx=AG.ctx,t=atTime(o),dur=o.dur||0.1,vol=o.vol===undefined?0.08:o.vol;
  const osc=ctx.createOscillator(),g=ctx.createGain();osc.type=o.type||'sine';
@@ -2335,6 +2361,7 @@ function glide(o){
  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(0.0002,vol),t+Math.min(0.01,dur*0.3));g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
  osc.connect(g);osc.start(t);osc.stop(t+dur+0.05);voiceStart(osc);routeVoice(g,o);
 }
+// фильтрованный шум: взмах, удар, шорох
 function noise(o){
  if(!AG||activeVoices>56)return;const ctx=AG.ctx,t=atTime(o),dur=o.dur||0.1,vol=o.vol===undefined?0.08:o.vol,att=Math.min(o.att===undefined?0.005:o.att,dur*0.8);
  const src=ctx.createBufferSource();src.buffer=AG.noise;src.loop=true;
@@ -2343,6 +2370,7 @@ function noise(o){
  const g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(0.0002,vol),t+att);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
  src.connect(f);f.connect(g);src.start(t,Math.random()*0.5);src.stop(t+dur+0.05);voiceStart(src);routeVoice(g,o);
 }
+// тёплая подложка для музыки и фанфар
 function pad(o){
  if(!AG||activeVoices>56)return;const ctx=AG.ctx,t=atTime(o),dur=o.dur||2,vol=o.vol===undefined?0.05:o.vol,att=o.att||0.8,rel=o.rel||1;
  const out=ctx.createGain(),lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=o.cut||1100;lp.Q.value=0.5;
@@ -2382,6 +2410,7 @@ function sfx(n){
  try{fn();}catch(e){}
 }
 
+/* ---------- Музыка: меню спокойная, бой бодрее ---------- */
 const MUSIC={mode:'off',wantedMode:'off',timer:null,nextTime:0,bar:0,session:null};
 const MENU_CHORDS=[{r:48,t:[60,64,67]},{r:45,t:[57,60,64]},{r:41,t:[53,57,60]},{r:43,t:[55,59,62]},{r:48,t:[60,64,67]},{r:40,t:[59,64,67]},{r:41,t:[53,57,60]},{r:43,t:[55,59,62]}];
 const BATTLE_CHORDS=[{r:45,t:[57,60,64]},{r:41,t:[53,57,60]},{r:48,t:[55,60,64]},{r:43,t:[55,59,62]}];
@@ -2439,11 +2468,13 @@ document.addEventListener('visibilitychange',function(){if(document.visibilitySt
 let lastHitT=0;
 function hitSound(){const n=performance.now();if(n-lastHitT>105){lastHitT=n;sfx('hit');hapticImpact('light');}}
 
+/* ==================== CANVAS ==================== */
 const cv=document.getElementById('cv');
 const ctx=cv.getContext('2d');
 cv.width=W;cv.height=H;
 let RS=1,arenaLayer=null,arenaLayerKey='';
 
+/* ==================== СОСТОЯНИЕ ==================== */
 let units=[],towers=[],projectiles=[],particles=[],damageTexts=[],crownFx=[],frozenFx=[],lightningFx=[],emoteFx=[],sparkFx=[],poisonFx=[],fireFx=[];
 let players=null,selectedCard=-1,timeLeft=180,gameOver=true,aiTimer=2;
 let overtimeActive=false,lastPhaseKey='',phaseBannerTimer=null;
@@ -2464,6 +2495,7 @@ let superRageCharge=0;let superHealCharge=0;
 let rageActiveTimer=0;
 let currentEnemyName='Соперник';let currentEnemyAvatar='🤖';
 
+/* ==================== ФАБРИКИ ==================== */
 function makeUnit(cfg,team,x,y){
  const mul=(team===0)?cardMul(cfg.id):((!onlineMode&&!sandboxActive)?cardMulForLevel(aiCardLevel()):1);
  const evolved=(team===0)&&isEvolved(cfg.id);
@@ -2480,6 +2512,8 @@ function makeUnit(cfg,team,x,y){
 function makeTower(team,x,y,type){
  const d=TOWER_DEF[type];
  const hpMul=eventActive&&currentEvent&&currentEvent.rule&&currentEvent.rule.towerHpMul?currentEvent.rule.towerHpMul:1;
+ // Persistent upgrades apply only to the local player's towers in AI/event/challenge battles.
+ // Sandbox and online matches keep baseline stats so the local profile cannot skew testing or network fairness.
  const useUpgrade=team===0&&!sandboxActive&&!onlineMode&&!(clanWarBattle&&clanWarBattle.active);
  const level=useUpgrade?towerLevel(type):1;
  const levelHpMul=1+(level-1)*TOWER_HP_PER_LEVEL;
@@ -2496,6 +2530,7 @@ function getArenaColors(){
  return {...ground,skyTop:sky.skyTop,skyBottom:sky.skyBottom,skyGlow:sky.skyGlow,skyAccent:sky.accent,skyEffect:sky.effect};
 }
 
+/* ==================== ПОГОДА ==================== */
 function initWeather(){
  weatherParticles=[];
  if(!progression.settings||progression.settings.snow===false)return;
@@ -2542,6 +2577,7 @@ function drawWeather(){
  }
 }
 
+/* ==================== СПЕЦСПОСОБНОСТИ ==================== */
 function gainSuperCharge(dmg){
  superRageCharge=Math.min(SUPER_MAX,superRageCharge+dmg*SUPER_GAIN_PER_DMG);
  superHealCharge=Math.min(SUPER_MAX,superHealCharge+dmg*SUPER_GAIN_PER_DMG*0.7);
@@ -2584,6 +2620,7 @@ function updateSuperUI(){
  if(healBtn)healBtn.classList.toggle('ready',superHealCharge>=SUPER_MAX);
 }
 
+/* ==================== ПЕСОЧНИЦА ==================== */
 const SANDBOX_AI_NAMES={balanced:'СБАЛАНСИРОВАННЫЙ',aggressive:'АГРЕССИВНЫЙ',defensive:'ЗАЩИТНЫЙ',tactical:'ТАКТИЧЕСКИЙ',random:'ХАОТИЧНЫЙ'};
 function refreshSandboxSetupFromUI(){
  const inf=document.getElementById('sandboxInfiniteToggle');if(inf)sandboxInfiniteElixir=!!inf.checked;
@@ -2617,7 +2654,7 @@ function openSandboxPicker(){
  const picker=document.getElementById('sandboxPicker'),grid=document.getElementById('sandboxPickerGrid');if(!picker||!grid)return;
  grid.innerHTML='';
  const ids=POOL_IDS.filter(id=>CARDS[id]);
- for(const id of ids){const c=CARDS[id];const b=document.createElement('button');b.className='sandboxPickCard';b.type='button';b.innerHTML='<span class="spIcon">'+c.icon+'</span><span class="spName">'+c.name+'</span><span class="spCost">'+c.cost+' эликсира</span>';b.addEventListener('click',function(){sandboxPendingCardId=id;picker.style.display='none';updateSandboxControls();damageTexts.push({x:W/2,y:240,text:'ВЫБЕРИ МЕСТО: '+c.name,life:1.5,max:1.5,color:'#80cbc4'});});grid.appendChild(b);}
+ for(const id of ids){const c=CARDS[id];const b=document.createElement('button');b.className='sandboxPickCard';b.type='button';b.innerHTML='<span class="spIcon">'+cardIconHtml(c)+'</span><span class="spName">'+c.name+'</span><span class="spCost">'+c.cost+' эликсира</span>';b.addEventListener('click',function(){sandboxPendingCardId=id;picker.style.display='none';updateSandboxControls();damageTexts.push({x:W/2,y:240,text:'ВЫБЕРИ МЕСТО: '+c.name,life:1.5,max:1.5,color:'#80cbc4'});});grid.appendChild(b);}
  picker.style.display='flex';
 }
 function placeSandboxCardAt(x,y){
@@ -2630,6 +2667,7 @@ function placeSandboxCardAt(x,y){
  sandboxPendingCardId=null;updateSandboxControls();return true;
 }
 
+/* ==================== БОЙ ==================== */
 function buildChallengeDeck(challenge){
  const rule=challenge&&challenge.rule?challenge.rule:{};
  let pool=POOL_IDS.filter(id=>{
@@ -2645,6 +2683,8 @@ function buildChallengeDeck(challenge){
  while(deck.length<DECK_SIZE){const cycle=shuffle(pool.slice());for(const id of cycle){deck.push(id);if(deck.length>=DECK_SIZE)break;}}
  return deck;
 }
+// Keep the battle deck at eight cards even when a modifier leaves fewer than eight
+// eligible cards unlocked. Duplicate substitutions are battle-only; the saved deck is unchanged.
 function buildDeckFromPool(pool,size=DECK_SIZE){
  const available=Array.from(new Set((Array.isArray(pool)?pool:[]).filter(id=>CARDS[id]&&!CARDS[id].internal)));
  if(!available.length)return normalizeDeckIds(playerDeckIds).slice(0,size);
@@ -2668,6 +2708,7 @@ function resetGame(){
  const legalPool=getUnlockedCardIds().filter(id=>!CARDS[id].spell);
  const extra=legalPool.filter(id=>!pDeckRaw.includes(id));
  while(pDeckRaw.length<DECK_SIZE&&extra.length)pDeckRaw.push(extra.splice((Math.random()*extra.length)|0,1)[0]);
+ // Дубли карт недопустимы: если уникальных не хватает, колода короче 8. Повторяем только если карт меньше 5 (иначе не собрать руку).
  while(pDeckRaw.length<5&&legalPool.length)pDeckRaw.push(legalPool[(Math.random()*legalPool.length)|0]);
  }
  }
@@ -3016,7 +3057,9 @@ function updateUnit(u,dt){
  else{const wp=getWaypoint(u,t);const dx=wp.x-u.x,dy=wp.y-u.y,dl=Math.hypot(dx,dy);if(dl>0.5){const step=u.cfg.speed*dt*speedMul,m=Math.min(step,dl);u.x+=(dx/dl)*m;u.y+=(dy/dl)*m;u._movedLastFrame=true;u.facing=dx>=0?1:-1;if(u.cfg.charge||u.cfg.id==='hog')u.chargeTime+=dt;}}
 }
 
+/* ==================== ЭТАП 37: фазы боя как в Clash Royale ==================== */
 function phasesEnabled(){return !!(currentMode&&currentMode.phases)&&!onlineMode&&!sandboxActive&&!challengeActive&&!eventActive&&!devSimulationActive&&replayState!=='playing';}
+// Обычное время: последняя минута ×2. Овертайм (2 минуты): первая минута ×2, последняя ×3.
 function elixirPhaseMul(){
  if(!phasesEnabled())return 1;
  if(overtimeActive)return timeLeft>OVERTIME_TRIPLE_AT?2:3;
@@ -3047,6 +3090,7 @@ function lowestTowerHp(team){
  return m;
 }
 function endOvertimeByTowers(){
+ // Башен не упало: проигрывает тот, у кого осталась башня с наименьшим здоровьем. Равенство — ничья.
  const mine=lowestTowerHp(0),theirs=lowestTowerHp(1);
  endGame(mine<theirs?'lose':mine>theirs?'win':'draw');
 }
@@ -3118,10 +3162,12 @@ function updateEffects(dt){
  crownFx=crownFx.filter(c=>c.life>0);
  for(const f of frozenFx)f.life-=dt;frozenFx=frozenFx.filter(f=>f.life>0);
  for(const l of lightningFx){l.t+=dt;l.life-=dt;}lightningFx=lightningFx.filter(l=>l.life>0);
+ for(const f of spellFx)f.life-=dt;spellFx=spellFx.filter(f=>f.life>0);
  for(const e of emoteFx){e.y-=50*dt;e.life-=dt;}emoteFx=emoteFx.filter(e=>e.life>0);
  if(rageActiveTimer>0){rageActiveTimer-=dt;if(rageActiveTimer<=0){for(const u of units){if(u.statuses&&u.statuses.rage&&u.statuses.rage>100){delete u.statuses.rage;}}}}
 }
 
+/* ==================== ИИ v3: оценка угроз, контркарты и управление эликсиром ==================== */
 function aiUnitDps(u){
  const c=u&&u.cfg?u.cfg:{};
  const base=(u&&Number.isFinite(u.dmg)?u.dmg:(c.dmg||0))/Math.max(0.45,c.atkCd||1);
@@ -3136,6 +3182,7 @@ function aiThreatValue(u,defendingTeam){
  if(c.splash)v+=0.35;
  if(u.flying||c.flying)v+=0.2;
  if(isTankThreat(u))v+=0.7;
+ // Score progress toward whichever side is being defended; supports AI diagnostics for both teams.
  const progress=defendTeam===0?clamp(((u.y||0)-(RIVER_Y-45))/400,0,1):clamp(((RIVER_Y+45)-(u.y||0))/400,0,1);
  const defendedTowers=towers.filter(t=>t.team===defendTeam&&!t.dead&&t.dyingTimer<=0);
  const nearest=defendedTowers.reduce((m,t)=>Math.min(m,dist(t,u)),Infinity);
@@ -3157,6 +3204,7 @@ function aiPickTargetTower(targetTeam){
  if(!live.length)return{x:W/2,y:RIVER_Y+90,tower:null};
  const score=t=>(1-t.hp/Math.max(1,t.maxHp))*1.8+(t.type==='princess'?0.25:0)+(t.isKing&&t.active?0.15:0);
  const bestScore=Math.max(...live.map(score));
+ // When towers are equally healthy, vary lanes instead of pushing the same side every match.
  const tied=live.filter(t=>bestScore-score(t)<0.08);
  const t=tied[(Math.random()*tied.length)|0]||live[0];
  return{x:t.x,y:t.y,tower:t};
@@ -3174,6 +3222,7 @@ function aiChoosePlacement(card,enemyThreats,allyUnits,laneInfo){
   const y=near.reduce((sum,u)=>sum+u.y*priority(u),0)/total;
   const tower=aiTowers.slice().sort((a,b)=>dist(a,{x,y})-dist(b,{x,y}))[0];
   let px=x,py=y-38;
+  // Defenders land between the advancing threat and the nearest threatened tower.
   if(tower){const dx=tower.x-x,dy=tower.y-y,len=Math.hypot(dx,dy)||1;px=x+dx/len*26;py=y+dy/len*26;}
   return nearestLegalDeployment(1,c.id,clamp(px,X_MIN+4,X_MAX-4),clamp(py,ARENA.y0+30,ENEMY_DEPLOY_Y-8));
  }
@@ -3187,6 +3236,7 @@ function aiChoosePlacement(card,enemyThreats,allyUnits,laneInfo){
  if(openLanes.length){
   const side=openLanes[(Math.random()*openLanes.length)|0];
   const x=(side==='left'?BRIDGE_L:BRIDGE_R)+rnd(-28,28);
+  // Push through the newly opened lane once a player Princess Tower falls.
   return nearestLegalDeployment(1,c.id,x,rnd(RIVER_Y+10,RIVER_Y+130));
  }
  const tower=aiPickTargetTower();
@@ -3338,6 +3388,7 @@ function updateAI(dt){
    const pos=aiChoosePlacement(pick.card,enemyThreats,allyUnits,laneInfo);targetX=pos.x;targetY=pos.y;
   }
  }
+ // Hard AI manages its elixir reserve when there is no pressing defence.
  if(d.saveElixir&&!defenseNeeded&&p.elixir<7&&(!pick||pick.card.cost>=5)&&enemyThreats.length<2){aiTimer=0.55;return;}
  if(pick){
   const legalPoint=nearestLegalDeployment(1,pick.card.id,targetX,targetY);targetX=legalPoint.x;targetY=legalPoint.y;
@@ -3349,6 +3400,8 @@ function updateAI(dt){
  aiTimer=Math.max(0.3,base);
 }
 
+
+/* ==================== КОНЕЦ ИГРЫ ==================== */
 function addBattleToHistory(won,draw,my,en,coins,trophiesDelta,modeName){
  if(!progression.battleHistory)progression.battleHistory=[];
  const d=new Date();
@@ -3392,6 +3445,7 @@ function endGame(reason){
  if(isClanWarMatch)clanWarRewardHtml=completeClanWarPlayerAttack(won,draw,my,en);
  const crownRes=(!onlineMode||onlineMatchRanked)?addDailyCrowns(my):null;
  const eligibleForBattleChest=won&&!onlineMode&&!sandboxActive&&!challengeActive&&!eventActive&&!tournament.active&&!isClanWarMatch&&m.id==='classic'&&replayState!=='playing';
+ // Season ladder matches are ordinary Classic matches or random matchmaking; private rooms and special modes are unranked.
  const rankedMatch=!isClanWarMatch&&!sandboxActive&&!challengeActive&&!eventActive&&!tournament.active&&replayState!=='playing'&&((!onlineMode&&m.id==='classic')||(onlineMode&&onlineMatchRanked));
  if(rankedMatch)ensureLocalLeaderboardSeason();
  let trophiesDelta=0;
@@ -3403,6 +3457,8 @@ function endGame(reason){
  progression.winStreak=(progression.winStreak||0)+1;
  if(onlineMode)progression.onlineWins=(progression.onlineWins||0)+1;
  if(currentDiff.id==='hard'||(currentDiff.id==='auto'&&currentDiff.aiLevel>=Math.round(playerDeckAvgLevel())))bumpCustomStat('hardWins',1);
+ if(my>=3&&!onlineMode&&!sandboxActive&&replayState!=='playing')bumpCustomStat('threeCrownWins',1);
+ /* Mega chest is now claimed manually from the shop, not shown over the battle result. */
  }else if(draw){title.textContent='НИЧЬЯ';title.style.color='#cfd8e3';}
  else{
  title.textContent='ПОРАЖЕНИЕ';title.style.color='#ff7a7a';sfx('defeat');hapticNotify('error');
@@ -3420,7 +3476,7 @@ function endGame(reason){
  sub.textContent='Короны: '+my+' : '+en+' · '+m.name+(overtimeActive?' · ОВЕРТАЙМ':'')+(isClanWarMatch?' · КЛАНОВАЯ ВОЙНА 5×5':'')+(eventActive&&currentEvent?' · '+currentEvent.name:'')+(onlineMode?' · ОНЛАЙН':'');
  const baseCoins=draw?40:(won?120:25),crownBonus=my*30;
  const totalMul=d.rewardMul*m.rewardMul;
- const coins=0;
+ const coins=0; // этап 35: золото за бой убрано (как в Clash Royale), награда — набор после победы
  const xp=Math.round((draw?25:(won?60:15))*totalMul);
  progression.coins+=coins;progression.totalCoinsEarned+=coins;addXp(xp);
  const bpXpGain=Math.round((won?80:draw?40:20)*(currentMode.rewardMul||1));
@@ -3441,7 +3497,7 @@ function endGame(reason){
  let rareReward='';
  if(currentChallenge.cardReward){
  const eligible=POOL_IDS.filter(id=>CARDS[id]&&CARDS[id].rarity==='rare'&&isCardUnlocked(id)&&cardLevel(id)<MAX_CARD_LEVEL);
- if(eligible.length){const id=eligible[(Math.random()*eligible.length)|0];addCardCopies(id,1);rareReward='<div class="reward" style="color:#ce93d8;"><span class="icon">'+CARDS[id].icon+'</span>КОПИЯ РЕДКОЙ КАРТЫ: '+CARDS[id].name+' · '+cardCopies(id)+' коп.</div>';}
+ if(eligible.length){const id=eligible[(Math.random()*eligible.length)|0];addCardCopies(id,1);rareReward='<div class="reward" style="color:#ce93d8;"><span class="icon">'+cardIconHtml(CARDS[id])+'</span>КОПИЯ РЕДКОЙ КАРТЫ: '+CARDS[id].name+' · '+cardCopies(id)+' коп.</div>';}
  else{progression.coins+=100;progression.totalCoinsEarned+=100;rareReward='<div class="reward" style="color:#ce93d8;">🎁 Бонус: +100 🪙</div>';}
  }
  challengeRewardHtml='<div class="reward" style="color:#ffb74d;"><span class="icon">🎯</span>ИСПЫТАНИЕ ПРОЙДЕНО! +'+r+' 🪙</div>'+rareReward;
@@ -3489,6 +3545,7 @@ function endGame(reason){
  const saveReplayBtn=document.getElementById('saveReplayBtn');
  chestBtn.style.display='none';nextTourBtn.style.display='none';saveReplayBtn.style.display='none';
  restartBtn.style.display='';restartBtn.textContent='СЫГРАТЬ ЕЩЁ РАЗ';restartBtn.onclick=function(){sfx('click');resetGame();};
+ /* Обычный сундук теперь только попадает в слот; открытие и выдача наград происходят на экране сундуков. */
  if(replayState==='recording'&&replayEvents.length>=3){
  saveReplayBtn.style.display='';
  saveReplayBtn.textContent='💾 СОХРАНИТЬ РЕПЛЕЙ';
@@ -3522,7 +3579,7 @@ function openChest(){
  saveProgression();checkAchievements();
  const rewardsEl=document.getElementById('ovRewards');
  let html='<div class="reward"><span class="icon">🪙</span>+'+coinsBonus+'</div>';
- for(const drop of drops){if(drop.id)html+='<div class="reward"><span class="icon">'+CARDS[drop.id].icon+'</span>Копия: '+CARDS[drop.id].name+' ('+cardCopies(drop.id)+')</div>';else html+='<div class="reward"><span class="icon">🪙</span>+'+drop.coins+' за максимальные карты</div>';}
+ for(const drop of drops){if(drop.id)html+='<div class="reward"><span class="icon">'+cardIconHtml(CARDS[drop.id])+'</span>Копия: '+CARDS[drop.id].name+' ('+cardCopies(drop.id)+')</div>';else html+='<div class="reward"><span class="icon">🪙</span>+'+drop.coins+' за максимальные карты</div>';}
  rewardsEl.innerHTML=html;
  const chestBtn=document.getElementById('openChestBtn');chestBtn.disabled=true;chestBtn.textContent='СУНДУК ОТКРЫТ';
  updateMenuStats();
@@ -3546,6 +3603,7 @@ function achStatValue(stat){
  case 'archmagePlayed':return progression.customStats.archmagePlayed||0;
  case 'shieldUsed':return progression.customStats.shieldUsed||0;
  case 'hardWins':return progression.customStats.hardWins||0;
+ case 'threeCrownWins':return progression.customStats.threeCrownWins||0;
  case 'superUsed':return progression.customStats.superUsed||0;
  default:return 0;
  }
@@ -3563,6 +3621,7 @@ function checkAchievements(){
 }
 function countAvailableAch(){let n=0;for(const base of ACHIEVEMENT_BASE){const current=ACHIEVEMENTS.filter(a=>a.baseId===base.id).sort((a,b)=>a.tier-b.tier).find(a=>!(progression.achievements[a.id]&&progression.achievements[a.id].claimed));if(current&&achStatValue(current.stat)>=current.target)n++;}return n;}
 
+/* ==================== СЕЗОННЫЙ ЛИДЕРБОРД TOP-100 / ЭТАП 28 ==================== */
 const LB_SEASON_WEEK_MS=7*24*60*60*1000;
 const LB_REWARD_TIERS=[
  {min:1,max:1,coins:12000,xp:1000,bp:400,label:'1 место'},
@@ -3587,6 +3646,7 @@ function isoLeaderboardSeason(date){
 }
 function currentLeaderboardSeason(){return isoLeaderboardSeason(new Date());}
 function lbPlayerId(){
+ const tu=tgUser();if(tu&&tu.id)return String(tu.id);
  const key='arenaClash_v28_player_id';let id='';
  try{id=localStorage.getItem(key)||'';}catch(e){}
  if(!/^[a-zA-Z0-9_-]{12,80}$/.test(id)){
@@ -3605,6 +3665,7 @@ function leaderboardSeasonStartFromId(id){
 const SOFT_RESET_FLOOR=3000,SOFT_RESET_KEEP=0.8;
 function softResetLadderTrophies(value){
  const t=Math.max(0,Math.floor(Number(value)||0));
+ // Первые 3000 кубков сохраняются полностью, 80% кубков выше порога переносится в новый сезон.
  return Math.floor(Math.min(t,SOFT_RESET_FLOOR)+Math.max(0,t-SOFT_RESET_FLOOR)*SOFT_RESET_KEEP);
 }
 function ensureLocalLeaderboardSeason(){
@@ -3617,6 +3678,7 @@ function ensureLocalLeaderboardSeason(){
  if(storedId!==season.id){
   const oldStart=leaderboardSeasonStartFromId(storedId);
   let periods=oldStart===null?1:Math.max(0,Math.floor((season.startMs-oldStart)/LB_SEASON_WEEK_MS));
+  // Guard corrupted/future IDs while still making the reset deterministic after long absences.
   periods=Math.min(520,periods);
   if(oldStart===null||oldStart>season.startMs)periods=1;
   for(let i=0;i<periods;i++)progression.trophies=softResetLadderTrophies(progression.trophies);
@@ -3651,6 +3713,7 @@ function updateSeasonLeaderboardAfterMatch(won,trophiesDelta){
  saveProgression();
  submitSeasonLeaderboardScore();
 }
+// Apply any missed weekly soft resets on load before rendering ladder/profile screens.
 ensureLocalLeaderboardSeason();
 function setSeasonLbStatus(text,kind){
  const el=document.getElementById('seasonLeaderboardStatus');if(!el)return;
@@ -3719,24 +3782,18 @@ function renderSeasonLeaderboardHistory(data){
  }
 }
 async function fetchSeasonLeaderboard(){
- if(typeof fetch!=='function'||location.protocol==='file:')throw new Error('Серверный рейтинг доступен при запуске игры через Node.js.');
- const response=await fetch('/api/season-leaderboard?playerId='+encodeURIComponent(lbPlayerId()),{cache:'no-store'});
- if(!response.ok)throw new Error('Сервер рейтинга ответил кодом '+response.status+'.');
- const data=await response.json();if(!data||!data.ok||!Array.isArray(data.entries))throw new Error('Некорректный ответ рейтинга.');
+ const data=await tgCall('getSeason',{});
+ if(!data||!data.ok||!Array.isArray(data.entries))throw new Error('Некорректный ответ рейтинга.');
  return data;
 }
 async function submitSeasonLeaderboardScore(){
- if(typeof fetch!=='function'||location.protocol==='file:')return false;
- const s=ensureLocalLeaderboardSeason();
- try{
-  const response=await fetch('/api/season-leaderboard/score',{method:'POST',headers:{'content-type':'application/json'},cache:'no-store',body:JSON.stringify({playerId:lbPlayerId(),name:String(progression.nickname||'Игрок').slice(0,24),avatar:String(progression.avatar||'🐺').slice(0,8),seasonalTrophies:progression.trophies,wins:s.wins,totalTrophies:progression.careerTrophies||progression.trophies})});
-  return response.ok;
- }catch(e){return false;}
+ if(!cloudAvailable())return false;
+ return cloudSubmitScore(true);
 }
 async function renderLeaderboard(){
  renderSeasonRewardTiers();
  const local=buildLocalLeaderboardFallback();renderSeasonLeaderboardSummary(local);renderSeasonLeaderboardRows(local);renderSeasonLeaderboardHistory(local);
- setSeasonLbStatus('Локальный просмотр рейтинга. Подключаю общий серверный топ-100…','warn');
+ setSeasonLbStatus(cloudAvailable()?'Загружаю рейтинг игроков…':'Локальный демо-рейтинг (вне Telegram).','warn');
  const refreshBtn=document.getElementById('refreshSeasonLeaderboardBtn');if(refreshBtn)refreshBtn.disabled=true;
  try{
   await submitSeasonLeaderboardScore();
@@ -3750,10 +3807,10 @@ async function renderLeaderboard(){
   }else if(data.previousSeason&&data.previousSeason.claimed){
    setSeasonLbStatus('Награда за сезон '+data.previousSeason.season+' уже получена на сервере.','ok');
   }else{
-   setSeasonLbStatus('Общий рейтинг сервера синхронизирован · игроков в сезоне: '+total+'. Награды выдаются после завершения сезона.','ok');
+   setSeasonLbStatus('Рейтинг игроков обновлён · участников в сезоне: '+total+'. Награды за топ-100 выдаются после завершения сезона.','ok');
   }
  }catch(e){
-  setSeasonLbStatus('Серверный топ-100 недоступен. Показан локальный демо-рейтинг; общий рейтинг появится после запуска сервера этапа 28.','warn');
+  setSeasonLbStatus(cloudAvailable()?'Не удалось загрузить рейтинг игроков. Проверь соединение и нажми «Обновить».':'Рейтинг игроков доступен внутри Telegram. Сейчас показан демо-рейтинг.','warn');
  }
  finally{if(refreshBtn)refreshBtn.disabled=false;}
 }
@@ -3761,25 +3818,262 @@ async function claimSeasonLeaderboardReward(requestedSeasonId){
  const btn=document.getElementById('claimSeasonRewardBtn');if(btn)btn.disabled=true;
  const status=document.getElementById('seasonLeaderboardStatus');
  try{
-  if(typeof fetch!=='function'||location.protocol==='file:')throw new Error('Для выдачи сезонной награды нужен сервер этапа 28.');
+  if(!cloudAvailable())throw new Error('Награды сезона выдаются внутри Telegram.');
   const info=await fetchSeasonLeaderboard();
   const prev=requestedSeasonId?(info.seasonHistory||[]).find(x=>x.season===requestedSeasonId):info.previousSeason;
   if(!prev||!prev.rewardAvailable)throw new Error('Награда за выбранный сезон недоступна.');
   const seasonId=prev.season;
   progression.seasonLeaderboardClaims=progression.seasonLeaderboardClaims||{};
   if(progression.seasonLeaderboardClaims[seasonId]){setSeasonLbStatus('Награда за сезон '+seasonId+' уже получена на этом устройстве.','ok');return;}
-  const response=await fetch('/api/season-leaderboard/claim',{method:'POST',headers:{'content-type':'application/json'},cache:'no-store',body:JSON.stringify({playerId:lbPlayerId(),season:seasonId})});
-  const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.message||'Не удалось получить награду.');
+  const result=await tgCall('claimSeason',{season:seasonId});if(!result||!result.ok)throw new Error('Не удалось получить награду.');
   const reward=result.reward||{};
-  const seasonCoins=Math.round(Math.max(0,Number(reward.coins)||0)*0.4);progression.coins+=seasonCoins;progression.totalCoinsEarned+=seasonCoins;
-  addXp(Math.max(0,Number(reward.xp)||0));addBpXp(Math.max(0,Number(reward.bp)||0));
+  // If the server committed the claim but the client crashed before local credit, recover once locally.
+  if(!result.alreadyClaimed){const seasonCoins=Math.round(Math.max(0,Number(reward.coins)||0)*0.4);progression.coins+=seasonCoins;progression.totalCoinsEarned+=seasonCoins;
+  addXp(Math.max(0,Number(reward.xp)||0));addBpXp(Math.max(0,Number(reward.bp)||0));}
   progression.seasonLeaderboardClaims[seasonId]=true;saveProgression();
   setSeasonLbStatus('Награда за '+seasonId+' получена: 🪙 '+(reward.coins||0)+', ⭐ '+(reward.xp||0)+' XP, 🎟️ '+(reward.bp||0)+' BP.'+(result.alreadyClaimed?' Восстановлена после подтверждения сервера.':''),'ok');
   sfx('ach');updateMenuStats();
  }catch(e){setSeasonLbStatus(e.message||'Ошибка получения награды.','err');}
  finally{if(btn)btn.disabled=false;try{const data=await fetchSeasonLeaderboard();data.entries=data.entries.map(e=>({...e,isPlayer:e.playerId===lbPlayerId()}));if(data.self)data.self={...data.self,isPlayer:true};renderSeasonLeaderboardSummary(data);renderSeasonLeaderboardRows(data);renderSeasonLeaderboardHistory(data);}catch(e){}}
 }
+/* ==================== ЭТАП 44: облако Telegram Serverless ==================== */
+function tgUser(){try{const w=window.Telegram&&window.Telegram.WebApp;return (w&&w.initDataUnsafe&&w.initDataUnsafe.user)||null;}catch(e){return null;}}
+function cloudAvailable(){try{const w=window.Telegram&&window.Telegram.WebApp;return !!(w&&w.initData&&w.Serverless&&typeof w.Serverless.call==='function');}catch(e){return false;}}
+function tgCall(name,input){
+ return new Promise(function(resolve,reject){
+  if(!cloudAvailable()){reject(new Error('Облако доступно только внутри Telegram.'));return;}
+  let done=false;
+  const timer=setTimeout(function(){if(done)return;done=true;reject(new Error('Сервер не ответил.'));},15000);
+  try{
+   window.Telegram.WebApp.Serverless.call(name,input||{},function(err,res){
+    if(done)return;done=true;clearTimeout(timer);
+    if(err){const e=new Error(err.message||'Ошибка сервера');e.code=(err.parameters&&err.parameters.code)||err.type||'ERR';reject(e);}
+    else resolve(res);
+   });
+  }catch(e){done=true;clearTimeout(timer);reject(e);}
+ });
+}
+const cloud={rev:0,ready:false,busy:false,timer:null,lastScoreKey:''};
+// Чей прогресс «больше»: сначала число сыгранных боёв, затем накопленные монеты.
+function cloudScore(p){p=p||{};return ((Number(p.wins)||0)+(Number(p.losses)||0))*1e9+(Number(p.totalCoinsEarned)||0);}
+function cloudPayload(){
+ const p=JSON.parse(JSON.stringify(progression));p.replays=[];
+ return JSON.stringify({v:1,prog:p,deck:playerDeckIds.slice(),savedAt:Date.now()});
+}
+// Принять прогресс с сервера: резервная копия локального, запись в хранилище и перезагрузка (один раз).
+function cloudAdopt(remote){
+ try{
+  const last=Number(sessionStorage.getItem('ac_cloud_reload')||0);
+  if(Date.now()-last<30000)return;
+  sessionStorage.setItem('ac_cloud_reload',String(Date.now()));
+  localStorage.setItem('arenaClash_cloud_backup',JSON.stringify({at:Date.now(),prog:progression,deck:playerDeckIds}));
+  const prog=remote.prog;prog.replays=progression.replays||[];
+  localStorage.setItem('arenaClash_v15_prog',JSON.stringify(prog));
+  if(Array.isArray(remote.deck))localStorage.setItem('arenaClash_v15_deck',JSON.stringify(remote.deck));
+  location.reload();
+ }catch(e){}
+}
+async function cloudPush(force){
+ if(cloud.busy||!cloud.ready||!cloudAvailable())return;
+ cloud.busy=true;
+ try{
+  let r=await tgCall('saveProfile',{data:cloudPayload(),baseRev:cloud.rev,force:!!force});
+  if(r&&r.conflict){
+   cloud.rev=r.rev;
+   const remote=JSON.parse(r.data);
+   if(cloudScore(remote.prog)>cloudScore(progression)){cloudAdopt(remote);return;}
+   r=await tgCall('saveProfile',{data:cloudPayload(),baseRev:cloud.rev,force:true});
+  }
+  if(r&&r.ok)cloud.rev=r.rev;
+ }catch(e){if(e&&e.code==='RATE'){clearTimeout(cloud.timer);cloud.timer=setTimeout(cloudRunSync,3500);}}
+ finally{cloud.busy=false;}
+}
+async function cloudSubmitScore(force){
+ if(!cloudAvailable())return false;
+ const s=ensureLocalLeaderboardSeason();
+ const key=[s.seasonId,progression.trophies,s.wins,s.games].join(':');
+ if(!force&&key===cloud.lastScoreKey)return true;
+ cloud.lastScoreKey=key;
+ try{
+  const tu=tgUser();
+  await tgCall('submitScore',{trophies:Math.max(0,Math.floor(Number(progression.trophies)||0)),wins:s.wins,games:s.games,
+   name:String(progression.nickname||(tu&&tu.first_name)||'Игрок').slice(0,24),avatar:String(progression.avatar||'🐺').slice(0,8)});
+  return true;
+ }catch(e){return false;}
+}
+async function cloudRunSync(){if(!cloud.ready||!cloudAvailable())return;await cloudPush(false);await cloudSubmitScore(false);}
+function cloudScheduleSync(delay){
+ if(!cloud.ready)return;
+ clearTimeout(cloud.timer);cloud.timer=setTimeout(cloudRunSync,delay||6000);
+}
+async function cloudInitialSync(){
+ if(!cloudAvailable())return;
+ try{
+  const r=await tgCall('getProfile',{});
+  cloud.rev=r.rev||0;cloud.ready=true;
+  if(r.exists){
+   const remote=JSON.parse(r.data);
+   const rs=cloudScore(remote.prog),ls=cloudScore(progression);
+   if(rs>ls){cloudAdopt(remote);return;}
+   if(ls>rs){await cloudPush(false);}
+  }else{await cloudPush(false);}
+  await cloudSubmitScore(false);
+  walletRefresh(true).then(function(){shopUiRefresh();});
+ }catch(e){cloud.ready=false;}
+}
+document.addEventListener('visibilitychange',function(){if(document.hidden&&cloud.ready)cloudRunSync();});
 
+/* ==================== ЭТАП 45: магазин Stars и гемы ==================== */
+// Цены и права (премиум, скины, гемы) живут на сервере. Клиент только показывает их и применяет.
+const shop2={gems:0,ents:[],catalog:null,termsOk:false,loadedAt:0,loading:false,busy:false};
+function acSleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+function walletHas(kind,item){return shop2.ents.some(function(e){return e.kind===kind&&e.item===String(item);});}
+function gemPriceOf(kind,id){const c=shop2.catalog;return (c&&c.skinGems&&c.skinGems[kind]&&c.skinGems[kind][id])||0;}
+function bpStarsPrice(tier){
+ const p=shop2.catalog&&shop2.catalog.products;
+ const prem=(p&&p.bp_premium&&p.bp_premium.stars)||250,plus=(p&&p.bp_plus&&p.bp_plus.stars)||450,up=(p&&p.bp_plus&&p.bp_plus.upgradeStars)||200;
+ if(tier==='premium')return prem;
+ return walletHas('bp_premium',progression.bpSeason||1)?up:plus;
+}
+function shopUiRefresh(){
+ try{
+  const vis=function(id){const e=document.getElementById(id);return e&&!e.classList.contains('hidden');};
+  if(vis('shopScreen'))renderShop();else if(vis('bpScreen'))renderBpScreen();else if(vis('customizeScreen'))renderCustomizeScreen();
+  updateMenuStats();
+ }catch(e){}
+}
+async function walletRefresh(force){
+ if(!cloudAvailable()||shop2.loading)return false;
+ if(!force&&Date.now()-shop2.loadedAt<20000)return false;
+ shop2.loading=true;
+ try{
+  const w=await tgCall('getWallet',{});
+  shop2.gems=w.gems||0;shop2.ents=w.entitlements||[];shop2.catalog=w.catalog||null;shop2.termsOk=!!w.termsAccepted;shop2.loadedAt=Date.now();
+  walletApply(w);
+  return true;
+ }catch(e){return false;}
+ finally{shop2.loading=false;}
+}
+// Применить права и подарки с сервера к локальному прогрессу.
+function walletApply(w){
+ let changed=false;
+ try{checkSeasonReset();}catch(e){}
+ const owned={skin_arena:'ownedSkins',skin_tower:'ownedTowerSkins',skin_sky:'ownedSkySkins',skin_holiday:'ownedHolidayThemes'};
+ const sel={skin_arena:'skin',skin_tower:'towerSkin',skin_sky:'skySkin',skin_holiday:'holidayTheme'};
+ const dflt={skin:'none',towerSkin:'classic',skySkin:'default',holidayTheme:'none'};
+ for(const e of (w.entitlements||[])){
+  const f=owned[e.kind];if(!f)continue;
+  if(!Array.isArray(progression[f]))progression[f]=[];
+  if(!progression[f].includes(e.item)){progression[f].push(e.item);changed=true;}
+ }
+ for(const e of (w.revoked||[])){            // возврат Stars: забрать выданное
+  const f=owned[e.kind];if(!f||!Array.isArray(progression[f]))continue;
+  const i=progression[f].indexOf(e.item);
+  if(i>=0){progression[f].splice(i,1);changed=true;}
+  const sf=sel[e.kind];
+  if(progression[sf]===e.item){progression[sf]=dflt[sf];changed=true;}
+ }
+ const season=String(progression.bpSeason||1);
+ const prem=(w.entitlements||[]).some(function(e){return e.kind==='bp_premium'&&e.item===season;});
+ const plus=(w.entitlements||[]).some(function(e){return e.kind==='bp_plus'&&e.item===season;});
+ if(!!progression.bpPremium!==prem){progression.bpPremium=prem;changed=true;}
+ if(!!progression.bpPremiumPlus!==plus){progression.bpPremiumPlus=plus;changed=true;}
+ // Подарки (монеты из наборов и обмена): применяем один раз, помним id и подтверждаем серверу.
+ const applied=progression.appliedInbox||(progression.appliedInbox=[]);
+ const ack=[];
+ for(const it of (w.inbox||[])){
+  if(!applied.includes(it.id)){
+   if(it.kind==='coins'){progression.coins+=Math.max(0,Math.floor(Number(it.amount)||0));}
+   applied.push(it.id);changed=true;
+  }
+  ack.push(it.id);
+ }
+ if(applied.length>300)applied.splice(0,applied.length-300);
+ if(changed)saveProgression();
+ if(ack.length)tgCall('ackInbox',{ids:ack}).catch(function(){});
+}
+async function starsBuy(productId){
+ if(shop2.busy)return;
+ if(!cloudAvailable()){alert('Покупки за Stars работают только внутри Telegram.');return;}
+ const wa=window.Telegram.WebApp;
+ if(typeof wa.openInvoice!=='function'){alert('Обнови Telegram, чтобы оплачивать Stars.');return;}
+ await walletRefresh(true);
+ let accept=false;
+ if(!shop2.termsOk){
+  if(!confirm('Перед первой покупкой подтверди: ты принимаешь условия покупок (текст: команда /terms в боте). Товары виртуальные и действуют только в игре. Продолжить?'))return;
+  accept=true;
+ }
+ shop2.busy=true;shopUiRefresh();
+ try{
+  const order=await tgCall('createOrder',{productId:productId,season:progression.bpSeason||1,acceptTerms:accept});
+  shop2.termsOk=true;
+  const status=await new Promise(function(res){wa.openInvoice(order.link,function(s){res(s);});});
+  if(status==='paid'||status==='pending'){
+   for(let i=0;i<14;i++){
+    const st=await tgCall('orderStatus',{orderId:order.orderId});
+    if(st.status==='delivered')break;
+    await acSleep(1500);
+   }
+   await walletRefresh(true);
+   try{sfx('chest');}catch(e){}
+   alert('Покупка получена. Спасибо!');
+  }else if(status==='failed'){
+   alert('Оплата не прошла. Stars не списаны.');
+  }
+ }catch(e){alert((e&&e.message)||'Не удалось создать счёт. Попробуй позже.');}
+ finally{shop2.busy=false;shopUiRefresh();}
+}
+async function gemsBuySkin(kind,id,name,price){
+ if(shop2.busy)return;
+ if(!confirm('Купить «'+name+'» за '+price+' гемов?'))return;
+ shop2.busy=true;
+ try{await tgCall('spendGems',{type:'skin',kind:kind,id:id});await walletRefresh(true);try{sfx('chest');}catch(e){}}
+ catch(e){alert((e&&e.message)||'Не удалось купить.');}
+ finally{shop2.busy=false;shopUiRefresh();}
+}
+async function gemsBuyCoins(id,gems,coins){
+ if(shop2.busy)return;
+ if(!confirm('Обменять '+gems+' гемов на '+coins+' монет?'))return;
+ shop2.busy=true;
+ try{await tgCall('spendGems',{type:'coins',id:id});await walletRefresh(true);try{sfx('chest');}catch(e){}}
+ catch(e){alert((e&&e.message)||'Не удалось обменять.');}
+ finally{shop2.busy=false;shopUiRefresh();}
+}
+function renderStarsBlock(el){
+ const title=document.createElement('div');
+ title.style.cssText='font-size:13px;color:#7ec8ff;letter-spacing:2px;text-align:center;margin-top:2px;font-weight:900;';
+ title.textContent='💎 ГЕМЫ И STARS';el.appendChild(title);
+ const note=function(t){const n=document.createElement('div');n.style.cssText='text-align:center;color:#7d94c4;padding:10px;font-size:12px;';n.textContent=t;el.appendChild(n);};
+ if(!cloudAvailable()){note('Покупки за Stars доступны в игре внутри Telegram.');return;}
+ if(!shop2.catalog){note('Загрузка магазина…');walletRefresh(true).then(function(ok){if(ok)shopUiRefresh();});return;}
+ const bal=document.createElement('div');bal.style.cssText='text-align:center;font-weight:900;color:#e8efff;font-size:14px;';bal.textContent='Твои гемы: 💎 '+shop2.gems;el.appendChild(bal);
+ const prods=shop2.catalog.products||{};
+ const row=function(name,desc,btnText,disabled,onClick,ready){
+  const it=document.createElement('div');it.className='shopItem'+(ready?' ready':'');
+  const info=document.createElement('div');info.className='siInfo';
+  const n=document.createElement('div');n.className='siName';n.textContent=name;info.appendChild(n);
+  const d=document.createElement('div');d.className='siDesc';d.textContent=desc;info.appendChild(d);
+  it.appendChild(info);
+  const b=document.createElement('button');b.className='siBtn';b.textContent=btnText;b.disabled=!!disabled||shop2.busy;
+  b.addEventListener('click',function(){try{sfx('click');}catch(e){}onClick();});
+  it.appendChild(b);el.appendChild(it);
+ };
+ if(prods.starter&&!walletHas('starter','1')){
+  row(prods.starter.title,prods.starter.desc,prods.starter.stars+' ⭐',false,function(){starsBuy('starter');},true);
+ }
+ for(const id of ['gems_50','gems_150','gems_400','gems_1000']){
+  const p=prods[id];if(!p)continue;
+  row(p.title,p.desc,p.stars+' ⭐',false,function(){starsBuy(id);});
+ }
+ const ex=shop2.catalog.exchange||{};
+ for(const id of Object.keys(ex)){
+  const o=ex[id];
+  row('🪙 '+o.coins+' монет','Обмен гемов на монеты · до '+(shop2.catalog.exchangeDailyLimit||3)+' раз в сутки',(o.gems)+' 💎',shop2.gems<o.gems,function(){gemsBuyCoins(id,o.gems,o.coins);});
+ }
+ note('Условия покупок: команда /terms в боте · Проблемы с платежом: /paysupport');
+}
+
+/* ==================== WEBSOCKET / ЭТАП 26 ==================== */
 const FRIENDS_STORAGE_KEY='arenaClash_v26_friends';
 function setPrivateStatus(text,kind){
  const el=document.getElementById('privateStatus');if(!el)return;
@@ -3847,7 +4141,7 @@ function updateOnlineUI(){
  case 'error':el.textContent='Ошибка подключения';el.classList.add('err');btn.textContent='ПОВТОРИТЬ ПОИСК';btn.disabled=false;btn.style.display='';icon.textContent='⚠️';desc.textContent='Проверь, что сервер запущен и доступен.';break;
  }
 }
-function connectWS(intent,code){
+function connectWS(intent,code){if(!ONLINE_ENABLED)return;
  intent=intent||'queue';
  if(ws&&(ws.readyState===WebSocket.OPEN||ws.readyState===WebSocket.CONNECTING))disconnectWS();
  onlineIntent=intent;onlineMatchRanked=intent==='queue';privateRoomCode=code||'';onlineState='connecting';updateOnlineUI();
@@ -3882,18 +4176,19 @@ function disconnectWS(){
  onlineState='offline';onlineMode=false;onlineMatchRanked=false;onlineRoomId=null;onlineIntent='queue';updateOnlineUI();clearPrivateInvite();setPrivateStatus('Соединение закрыто.');
 }
 function openInviteFromUrl(){
+ if(!ONLINE_ENABLED)return;
  try{const u=new URL(location.href);const code=(u.searchParams.get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);if(!code)return;
   const input=document.getElementById('privateCodeInput');if(input)input.value=code;showScreen('online');updateOnlineUI();setPrivateStatus('Тебя пригласили в комнату '+code+'. Нажми «Присоединиться».','wait');
  }catch(e){}
 }
-
+/* ==================== РЕНДЕР ==================== */
 function render(){
  if(!ctx)return;
  ctx.save();ctx.setTransform(RS,0,0,RS,0,0);
  const reduceMotion=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
  if(shake>0&&!gameOver&&!reduceMotion)ctx.translate(rnd(-shake,shake)*0.5,rnd(-shake,shake)*0.5);
  drawArena();drawWeather();drawTowers();drawUnits();drawProjectiles();
- drawPoisonFx();drawFireFx();drawFrozenFx();drawLightningFx();
+ drawPoisonFx();drawFireFx();drawFrozenFx();drawLightningFx();drawSpellFx();
  drawParticles();drawSparkFx();drawDamageTexts();drawCrownFx();drawEmoteFx();
  drawDeployZone();drawGhost();
  ctx.restore();updateHUD();
@@ -3909,29 +4204,36 @@ function mixColor(a,b,t){
 }
 function buildArenaLayer(A){
  const c=document.createElement('canvas');c.width=Math.round(W*RS);c.height=Math.round(H*RS);const g=c.getContext('2d');g.setTransform(RS,0,0,RS,0,0);
+ // лес вокруг арены
  const sky=g.createLinearGradient(0,0,0,H);sky.addColorStop(0,A.skyTop||'#19263d');sky.addColorStop(1,A.skyBottom||'#516985');
  g.fillStyle=sky;g.fillRect(0,0,W,H);
  const tree=function(x,y,r){g.fillStyle='rgba(0,0,0,0.25)';g.beginPath();g.ellipse(x+3,y+r*0.8,r,r*0.45,0,0,7);g.fill();g.fillStyle='#2b6a35';g.beginPath();g.arc(x,y,r,0,7);g.fill();g.fillStyle='#3f8f4a';g.beginPath();g.arc(x-r*0.25,y-r*0.3,r*0.6,0,7);g.fill();};
  for(let y=14;y<H;y+=52){tree(8,y+((y/52|0)%2?10:0),15);tree(W-8,y+((y/52|0)%2?0:10),15);}
  for(let x=60;x<W-40;x+=70){tree(x,12+((x/70|0)%2?6:0),13);tree(x+14,H-12-((x/70|0)%2?0:6),13);}
+ // трава «шахматкой»
  const T=32,c1=A.grass1,c2=mixColor(A.grass1,A.grass2,0.55);
  const cols=Math.ceil((ARENA.x1-ARENA.x0)/T),rows=Math.ceil((ARENA.y1-ARENA.y0)/T);
  for(let ty=0;ty<rows;ty++)for(let tx=0;tx<cols;tx++){
   const x=ARENA.x0+tx*T,y=ARENA.y0+ty*T;g.fillStyle=((tx+ty)&1)?c1:c2;
   g.fillRect(x,y,Math.min(T,ARENA.x1-x),Math.min(T,ARENA.y1-y));
  }
+ // дорожки к мостам
  g.fillStyle='rgba(0,0,0,0.11)';
  for(const bx of [BRIDGE_L,BRIDGE_R]){g.fillRect(bx-19,170,38,RIVER_Y-30-170);g.fillRect(bx-19,RIVER_Y+30,38,650-(RIVER_Y+30));}
+ // дымка и виньетка
  const haze=g.createLinearGradient(0,ARENA.y0,0,RIVER_Y);haze.addColorStop(0,A.skyGlow||'rgba(120,170,210,0.1)');haze.addColorStop(1,'rgba(0,0,0,0)');
  g.fillStyle=haze;g.fillRect(ARENA.x0,ARENA.y0,ARENA.x1-ARENA.x0,RIVER_Y-ARENA.y0);
  const vg=g.createRadialGradient(W/2,H/2,H*0.25,W/2,H/2,H*0.75);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,0.35)');
  g.fillStyle=vg;g.fillRect(0,0,W,H);
+ // плиты с коронами за королевскими башнями
  const plinth=function(cy){g.fillStyle='rgba(0,0,0,0.3)';g.fillRect(W/2-52,cy-12,104,30);g.fillStyle='#8c93a1';g.fillRect(W/2-52,cy-14,104,28);g.fillStyle='#a9b0be';g.fillRect(W/2-52,cy-14,104,5);
   g.fillStyle='#ffd54f';g.beginPath();g.moveTo(W/2-14,cy+6);g.lineTo(W/2-18,cy-6);g.lineTo(W/2-7,cy-1);g.lineTo(W/2,cy-9);g.lineTo(W/2+7,cy-1);g.lineTo(W/2+18,cy-6);g.lineTo(W/2+14,cy+6);g.closePath();g.fill();};
  plinth(ARENA.y0+8);plinth(ARENA.y1-8);
+ // река (основа)
  const rg=g.createLinearGradient(0,RIVER_Y-30,0,RIVER_Y+30);rg.addColorStop(0,A.water1);rg.addColorStop(0.5,A.water2);rg.addColorStop(1,A.water1);
  g.fillStyle=rg;g.fillRect(ARENA.x0,RIVER_Y-30,ARENA.x1-ARENA.x0,60);
  g.fillStyle='rgba(120,90,50,0.6)';g.fillRect(ARENA.x0,RIVER_Y-32,ARENA.x1-ARENA.x0,3);g.fillRect(ARENA.x0,RIVER_Y+29,ARENA.x1-ARENA.x0,3);
+ // забор по периметру
  const fence=function(x,y,w,h){g.fillStyle='#5d4326';g.fillRect(x,y,w,h);g.fillStyle='#8b6a45';g.fillRect(x,y,w,Math.min(3,h));};
  fence(ARENA.x0-8,ARENA.y0-8,ARENA.x1-ARENA.x0+16,8);fence(ARENA.x0-8,ARENA.y1,ARENA.x1-ARENA.x0+16,8);fence(ARENA.x0-8,ARENA.y0,8,ARENA.y1-ARENA.y0);fence(ARENA.x1,ARENA.y0,8,ARENA.y1-ARENA.y0);
  g.fillStyle='#3f2c18';
@@ -3950,6 +4252,7 @@ function drawArena(){
  for(let k=0;k<3;k++){ctx.beginPath();for(let x=ARENA.x0;x<=ARENA.x1;x+=12){const y=RIVER_Y-16+k*16+Math.sin(x*0.025+wavePhase+k)*3.5;if(x===ARENA.x0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();}
  ctx.restore();
  drawBridge(BRIDGE_L);drawBridge(BRIDGE_R);
+ // Sky ornament sits in the background margin; it never covers towers or troops.
  ctx.save();ctx.globalAlpha=0.86;ctx.shadowColor=A.skyAccent||'#d9ecff';ctx.shadowBlur=10;ctx.fillStyle=A.skyAccent||'#d9ecff';ctx.beginPath();ctx.arc(W-14,10,5,0,7);ctx.fill();ctx.shadowBlur=0;ctx.restore();
  drawHolidayDecorations();
 }
@@ -3976,8 +4279,10 @@ function drawBridge(bx){
 let ruins=[];
 function drawTowerRuin(t){
  const r=t.r;ctx.save();
+ // выжженная земля
  ctx.fillStyle='rgba(30,22,14,0.42)';ctx.beginPath();ctx.ellipse(t.x,t.y+r*0.35,r*1.35,r*0.9,0,0,7);ctx.fill();
  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.beginPath();ctx.ellipse(t.x,t.y+r*0.5,r*1.05,r*0.6,0,0,7);ctx.fill();
+ // обломки каменной кладки
  const chunks=[[-0.78,0.28,0.62,0.44,-0.15],[-0.12,0.42,0.7,0.5,0.1],[0.62,0.3,0.54,0.4,0.2],[-0.4,-0.02,0.46,0.38,0.3],[0.28,0.0,0.5,0.4,-0.2],[0.0,-0.3,0.34,0.3,0.1],[-0.95,0.62,0.32,0.26,0.4],[0.9,0.6,0.3,0.24,-0.3]];
  for(const q of chunks){
   const w=q[2]*r,h=q[3]*r,x=t.x+q[0]*r,y=t.y+q[1]*r;
@@ -3988,7 +4293,9 @@ function drawTowerRuin(t){
   ctx.strokeStyle='rgba(20,24,32,0.7)';ctx.lineWidth=1;rrect(-w/2,-h/2,w,h,3);ctx.stroke();
   ctx.restore();
  }
+ // обугленный брус
  ctx.fillStyle='#4a3524';ctx.save();ctx.translate(t.x-r*0.2,t.y+r*0.12);ctx.rotate(-0.5);ctx.fillRect(-r*0.7,-3,r*1.4,6);ctx.restore();
+ // корона достаётся противнику разрушенной башни
  const col=t.team===0?'#ff6b6b':'#5aa8ff',cx=t.x,cy=t.y-r*0.85,k=r*0.58;
  ctx.shadowColor=col;ctx.shadowBlur=12;ctx.fillStyle=col;ctx.beginPath();
  ctx.moveTo(cx-k,cy+k*0.7);ctx.lineTo(cx-k,cy-k*0.35);ctx.lineTo(cx-k*0.5,cy+k*0.05);ctx.lineTo(cx,cy-k*0.8);ctx.lineTo(cx+k*0.5,cy+k*0.05);ctx.lineTo(cx+k,cy-k*0.35);ctx.lineTo(cx+k,cy+k*0.7);ctx.closePath();ctx.fill();
@@ -4009,6 +4316,8 @@ function drawTower(t){
  if(t.isKing&&t.active){ctx.shadowColor=blue?'#7ab0ff':'#ff7a7a';ctx.shadowBlur=22;}
  ctx.fillStyle='rgba(0,0,0,0.32)';ctx.beginPath();ctx.ellipse(t.x,t.y+r*0.85,r*1.15,r*0.42,0,0,7);ctx.fill();
  ctx.shadowBlur=0;
+ const spr=towerSprite(towerStyle,t.team===0?0:1,!!t.isKing,!!t.active);
+ if(spr){const th=r*2.8,tw=th*0.75;if(t.isKing&&t.active){ctx.shadowColor=blue?'#7ab0ff':'#ff7a7a';ctx.shadowBlur=16;}ctx.drawImage(spr,t.x-tw/2,t.y+r*0.95-th,tw,th);ctx.shadowBlur=0;}else{
  ctx.fillStyle=cDark;rrect(t.x-r*0.95,t.y-r*0.35,r*1.9,r*1.3,7);ctx.fill();
  ctx.fillStyle=cMain;rrect(t.x-r*0.78,t.y-r*1.0,r*1.56,r*1.25,7);ctx.fill();
  ctx.fillStyle='rgba(255,255,255,0.14)';rrect(t.x-r*0.62,t.y-r*0.88,r*0.4,r*1.0,5);ctx.fill();
@@ -4021,6 +4330,7 @@ function drawTower(t){
  if(t.isKing){
  ctx.fillStyle=t.active?towerStyle.crown:towerStyle.dullCrown;
  ctx.beginPath();ctx.moveTo(t.x-r*0.5,t.y-r*1.42);ctx.lineTo(t.x-r*0.35,t.y-r*1.75);ctx.lineTo(t.x-r*0.12,t.y-r*1.48);ctx.lineTo(t.x,t.y-r*1.85);ctx.lineTo(t.x+r*0.12,t.y-r*1.48);ctx.lineTo(t.x+r*0.35,t.y-r*1.75);ctx.lineTo(t.x+r*0.5,t.y-r*1.42);ctx.closePath();ctx.fill();ctx.strokeStyle=towerStyle.trim;ctx.lineWidth=1.5;ctx.stroke();
+ }
  }
  if(t.flash>0){ctx.globalAlpha=t.flash*5;ctx.fillStyle='#fff';rrect(t.x-r*0.95,t.y-r*1.38,r*1.9,r*2.3,8);ctx.fill();ctx.globalAlpha=1;}
  if(t.frozen>0){ctx.globalAlpha=0.55;ctx.fillStyle='#b3e5fc';ctx.beginPath();ctx.arc(t.x,t.y-r*0.6,r*1.4,0,7);ctx.fill();ctx.globalAlpha=1;}
@@ -4036,6 +4346,585 @@ function drawHpBar(cx,cy,w,ratio,team,showNum,hp){
  ctx.fillStyle='rgba(255,255,255,0.28)';rrect(x,cy,Math.max(0,w*ratio),h/2,3);ctx.fill();
  if(showNum){ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff';ctx.strokeStyle='rgba(0,0,0,.9)';ctx.lineWidth=3;ctx.strokeText(Math.ceil(hp),cx,cy+h/2);ctx.fillText(Math.ceil(hp),cx,cy+h/2);ctx.textAlign='start';ctx.textBaseline='alphabetic';}
 }
+/* ==================== ЭТАП 46: ВЕКТОРНЫЕ ГЕРОИ (SVG-спрайты) ==================== */
+// Герои нарисованы кодом (SVG), для каждого есть кадры: покой, ходьба (4) и атака (3), цвета команды подставляются.
+// Чтобы добавить героя: допиши функцию в HERO_ART (ключ = shape карты) и размер в HERO_SIZE.
+const HOL='stroke="#1b2233" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"';
+const HERO_PAL=[{t1:'#4a7fd4',t2:'#26436f',t3:'#8fb6f0'},{t1:'#d4514a',t2:'#7d2823',t3:'#f09a95'}];
+const HERO_POSES={i:{},w0:{leg:20},w1:{body:-3},w2:{leg:-20},w3:{body:-3},
+ a0:{arm:-14,ty:-3,pull:0,ax:0,ao:1,bo:0,bx:0},a1:{arm:25,ty:-9,pull:-7,ax:-6,ao:1,bo:1,bx:0},a2:{arm:46,ty:-6,pull:0,ax:40,ao:0.4,bo:0.8,bx:14}};
+const HERO_SIZE={knight:2.9,archer:2.8,goblin:3.2,archmage:3.0,giant:3.0,musketeer:2.9,valkyrie:2.9,wolf:3.1,hog:3.2,prince:3.3,pekka:3.0,skeleton:3.4,bomber:3.0,witch:3.0,minion:3.3,bat:3.6,dragon:3.4,ghost:3.0,golem:3.0,megaKnight:3.1,eliteBarb:2.9,lumberjack:2.9,spider:3.4,healer:2.9,cannon:3.2,mortar:3.2,siege:3.4,mine:3.0};
+const HERO_W=162,HERO_H=169; // кадр с полями: viewBox -12 -8 144 150, ступня героя в точке (60,122)
+function hRot(a,x,y){return 'rotate('+a+' '+x+' '+y+')';}
+function heroDefs(t){const P=HERO_PAL[t];return '<defs>'+
+ '<linearGradient id="gMain" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+P.t3+'"/><stop offset=".45" stop-color="'+P.t1+'"/><stop offset="1" stop-color="'+P.t2+'"/></linearGradient>'+
+ '<linearGradient id="gSteel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f1f5fb"/><stop offset=".5" stop-color="#aab6ca"/><stop offset="1" stop-color="#6c7890"/></linearGradient>'+
+ '<linearGradient id="gSkin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd9b8"/><stop offset="1" stop-color="#e9a57c"/></linearGradient>'+
+ '<linearGradient id="gGob" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9be15a"/><stop offset="1" stop-color="#4d9a2c"/></linearGradient>'+
+ '<linearGradient id="gFur" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c5ccd8"/><stop offset="1" stop-color="#7a8496"/></linearGradient>'+
+ '<linearGradient id="gHog" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8a688"/><stop offset="1" stop-color="#b97358"/></linearGradient>'+
+ '<linearGradient id="gHorse" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9763f"/><stop offset="1" stop-color="#7a4a24"/></linearGradient>'+
+ '<linearGradient id="gDark" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5a6478"/><stop offset=".5" stop-color="#363e50"/><stop offset="1" stop-color="#1c212d"/></linearGradient>'+
+ '<linearGradient id="gWitch" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a4aae"/><stop offset="1" stop-color="#341650"/></linearGradient>'+
+ '<linearGradient id="gMinion" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fbde0"/><stop offset="1" stop-color="#5a7aa3"/></linearGradient>'+
+ '<linearGradient id="gDragon" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fe08a"/><stop offset=".5" stop-color="#4fb05a"/><stop offset="1" stop-color="#2a6e3a"/></linearGradient>'+
+ '<linearGradient id="gGhost" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7f3ff"/><stop offset=".55" stop-color="#bba8ec"/><stop offset="1" stop-color="#7a5cc0"/></linearGradient>'+'<linearGradient id="gStone" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c9cdd5"/><stop offset=".5" stop-color="#8a909c"/><stop offset="1" stop-color="#5a606c"/></linearGradient>'+
+ '<linearGradient id="gSpider" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a5a8a"/><stop offset="1" stop-color="#2f1c3e"/></linearGradient>'+
+ '<linearGradient id="gHeal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a8e8b0"/><stop offset=".5" stop-color="#3a9a64"/><stop offset="1" stop-color="#1f5a3c"/></linearGradient>'+
+ '<radialGradient id="gHealOrb" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#fff"/><stop offset=".4" stop-color="#a8ffc0"/><stop offset="1" stop-color="#1fa05a"/></radialGradient>'+'<radialGradient id="gOrb" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#8ff3ff"/><stop offset="1" stop-color="#1f8fd6"/></radialGradient>'+
+ '</defs>';}
+const HERO_ART={
+knight:function(p){return ''+
+ '<g transform="'+hRot(p.leg,51,96)+'"><rect x="45" y="94" width="13" height="26" rx="5" fill="#5b6577" '+HOL+'/><rect x="41" y="113" width="20" height="10" rx="4" fill="#2f3644" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,69,96)+'"><rect x="62" y="94" width="13" height="26" rx="5" fill="#5b6577" '+HOL+'/><rect x="58" y="113" width="20" height="10" rx="4" fill="#2f3644" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ (p.v==='legendKnight'?'<path d="M36 58 Q10 88 18 120 Q40 114 50 100Z" fill="url(#gMain)" '+HOL+'/>':'')+
+ '<path d="M40 62 Q40 54 60 54 Q80 54 80 62 L82 98 Q60 106 38 98 Z" fill="url(#gMain)" '+HOL+'/><path d="M50 60 Q60 58 70 60 L70 80 Q60 84 50 80Z" fill="#fff" opacity=".14"/>'+
+ '<rect x="39" y="88" width="43" height="7" rx="2" fill="#3b2f24" '+HOL+'/><circle cx="60" cy="91.5" r="4" fill="#ffd54f" stroke="#1b2233" stroke-width="2"/>'+
+ '<circle cx="40" cy="64" r="8" fill="url(#gSteel)" '+HOL+'/>'+
+ '<path d="M44 40 Q44 22 60 22 Q76 22 76 40 L76 50 Q60 56 44 50Z" fill="url(#gSteel)" '+HOL+'/>'+
+ '<rect x="48" y="37" width="24" height="6" rx="3" fill="#121722"/><circle cx="54" cy="40" r="1.4" fill="#9fe3ff"/><circle cx="66" cy="40" r="1.4" fill="#9fe3ff"/>'+
+ '<path d="M60 22 Q54 6 72 4 Q70 16 67 25Z" fill="url(#gMain)" '+HOL+'/>'+
+ (p.v==='legendKnight'?'<path d="M46 26 L47 12 L53 20 L60 8 L67 20 L73 12 L74 26Z" fill="#ffd54f" '+HOL+'/>':'')+
+ '<path d="M18 62 L46 62 L46 84 Q32 98 18 84Z" fill="url(#gMain)" '+HOL+'/><path d="M32 68 L38 76 L32 86 L26 76Z" fill="#ffd54f" stroke="#1b2233" stroke-width="2"/>'+
+ '<g transform="'+hRot(p.arm,84,70)+'"><rect x="79" y="62" width="12" height="26" rx="6" fill="url(#gSteel)" '+HOL+'/><circle cx="88" cy="88" r="6" fill="#7a8499" '+HOL+'/>'+
+ '<path d="M86 86 L88 24 L93 24 L95 86Z" fill="#eef3fb" stroke="#1b2233" stroke-width="2.5" stroke-linejoin="round"/><path d="M90.5 28 L90.5 80" stroke="#b6c2d8" stroke-width="2"/>'+
+ '<rect x="81" y="84" width="20" height="6" rx="3" fill="#ffd54f" stroke="#1b2233" stroke-width="2.5"/><circle cx="91" cy="97" r="3.5" fill="#ffd54f" stroke="#1b2233" stroke-width="2"/></g></g>';},
+
+archer:function(p){return ''+
+ '<g transform="'+hRot(p.leg,54,98)+'"><rect x="49" y="98" width="10" height="22" rx="4" fill="#7a4a28" '+HOL+'/><rect x="46" y="114" width="16" height="9" rx="4" fill="#4a2c16" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,68,98)+'"><rect x="63" y="98" width="10" height="22" rx="4" fill="#7a4a28" '+HOL+'/><rect x="60" y="114" width="16" height="9" rx="4" fill="#4a2c16" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<g transform="rotate(-18 44 70)"><rect x="36" y="50" width="12" height="34" rx="4" fill="#7a4a28" '+HOL+'/><path d="M39 50 L38 42 M43 50 L43 40 M47 50 L48 43" stroke="#e8eef9" stroke-width="3" stroke-linecap="round"/></g>'+
+ '<path d="M46 98 L50 62 Q60 56 72 62 L78 98 Q62 104 46 98Z" fill="url(#gMain)" '+HOL+'/><rect x="47" y="86" width="31" height="6" fill="#4a2c16" '+HOL+'/>'+
+ '<path d="M44 40 Q38 62 52 66 L50 40Z" fill="#8a5a30" '+HOL+'/>'+
+ '<circle cx="62" cy="40" r="15" fill="url(#gSkin)" '+HOL+'/>'+
+ '<path d="M45 42 Q44 18 62 16 Q80 18 79 42 Q74 30 62 30 Q50 30 45 42Z" fill="url(#gMain)" '+HOL+'/>'+
+ '<circle cx="68" cy="42" r="2" fill="#1b2233"/><circle cx="58" cy="42" r="2" fill="#1b2233"/><path d="M60 49 Q63 51 66 49" stroke="#8a3b2a" stroke-width="2" fill="none" stroke-linecap="round"/>'+
+ '<path d="M96 34 Q114 70 96 106" fill="none" stroke="#8b5a2b" stroke-width="6" stroke-linecap="round"/><path d="M96 34 L96 106" stroke="#e8eef9" stroke-width="1.6"/>'+
+ '<g transform="translate('+p.ax+' 0)" opacity="'+p.ao+'"><path d="M70 70 L100 70" stroke="#6b4220" stroke-width="2.5" stroke-linecap="round"/><path d="M100 70 L94 66 L94 74Z" fill="#cfd8e8" stroke="#1b2233" stroke-width="1.5"/><path d="M70 70 L66 66 M70 70 L66 74" stroke="#e8eef9" stroke-width="2.5" stroke-linecap="round"/></g>'+
+ '<rect x="80" y="64" width="18" height="10" rx="5" fill="url(#gSkin)" '+HOL+'/><g transform="translate('+p.pull+' 0)"><rect x="62" y="64" width="22" height="10" rx="5" fill="url(#gMain)" '+HOL+'/><circle cx="62" cy="69" r="5" fill="url(#gSkin)" stroke="#1b2233" stroke-width="2"/></g></g>';},
+
+goblin:function(p){return ''+
+ '<g transform="'+hRot(p.leg,54,104)+'"><rect x="49" y="104" width="9" height="16" rx="4" fill="#4d9a2c" '+HOL+'/><ellipse cx="53" cy="121" rx="8" ry="4.5" fill="#3a2a1a" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,68,104)+'"><rect x="63" y="104" width="9" height="16" rx="4" fill="#4d9a2c" '+HOL+'/><ellipse cx="68" cy="121" rx="8" ry="4.5" fill="#3a2a1a" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M47 80 Q47 76 60 76 Q73 76 73 80 L75 106 Q60 112 45 106Z" fill="url(#gMain)" '+HOL+'/><path d="M50 98 L57 108 L64 98 L71 108" stroke="#1b2233" stroke-width="2" fill="none"/>'+
+ '<path d="M36 52 L8 38 L34 70Z" fill="url(#gGob)" '+HOL+'/><path d="M84 52 L112 38 L86 70Z" fill="url(#gGob)" '+HOL+'/>'+
+ '<ellipse cx="60" cy="56" rx="26" ry="23" fill="url(#gGob)" '+HOL+'/>'+
+ '<ellipse cx="50" cy="52" rx="7" ry="8" fill="#fff8c4" stroke="#1b2233" stroke-width="2.5"/><ellipse cx="70" cy="52" rx="7" ry="8" fill="#fff8c4" stroke="#1b2233" stroke-width="2.5"/><circle cx="52" cy="53" r="3" fill="#1b2233"/><circle cx="72" cy="53" r="3" fill="#1b2233"/>'+
+ '<path d="M42 44 L56 48 M78 44 L64 48" stroke="#1b2233" stroke-width="3" stroke-linecap="round"/>'+
+ '<path d="M56 56 Q60 66 64 56 Q60 54 56 56Z" fill="#76c23f" '+HOL+'/>'+
+ '<path d="M46 66 Q60 78 74 66 Q60 70 46 66Z" fill="#3a1d1d" stroke="#1b2233" stroke-width="2.5" stroke-linejoin="round"/><path d="M52 68 L54 73 L56 69 M64 69 L66 73 L68 68" fill="#fff" stroke="#1b2233" stroke-width="1.5" stroke-linejoin="round"/>'+
+ '<g transform="'+hRot(p.arm,76,84)+'"><rect x="72" y="80" width="10" height="20" rx="5" fill="url(#gGob)" '+HOL+'/><circle cx="80" cy="100" r="5" fill="#76c23f" '+HOL+'/><path d="M78 98 L84 62 L88 64 L86 100Z" fill="#dfe6f2" stroke="#1b2233" stroke-width="2.5" stroke-linejoin="round"/><rect x="76" y="96" width="14" height="5" rx="2" fill="#6b4220" stroke="#1b2233" stroke-width="2"/></g></g>';},
+
+archmage:function(p){return ''+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M38 122 L44 62 Q60 54 76 62 L82 122 Q60 130 38 122Z" fill="url(#gMain)" '+HOL+'/><path d="M52 66 L56 124 M68 66 L64 124" stroke="#fff" stroke-width="2" opacity=".18"/>'+
+ '<rect x="42" y="84" width="38" height="7" rx="3" fill="#ffd54f" '+HOL+'/><circle cx="58" cy="102" r="2.4" fill="#ffd54f"/><circle cx="68" cy="110" r="2.4" fill="#ffd54f"/><circle cx="50" cy="112" r="2" fill="#ffd54f"/>'+
+ '<circle cx="42" cy="68" r="8" fill="url(#gMain)" '+HOL+'/>'+
+ '<circle cx="60" cy="48" r="14" fill="url(#gSkin)" '+HOL+'/>'+
+ '<path d="M47 52 Q60 92 73 52 Q60 60 47 52Z" fill="#f4f6fb" '+HOL+'/>'+
+ '<circle cx="55" cy="46" r="2" fill="#1b2233"/><circle cx="66" cy="46" r="2" fill="#1b2233"/><path d="M51 41 L58 43 M70 41 L63 43" stroke="#cfd6e4" stroke-width="3" stroke-linecap="round"/>'+
+ '<ellipse cx="60" cy="40" rx="27" ry="7" fill="url(#gMain)" '+HOL+'/>'+
+ '<path d="M44 38 Q50 16 66 6 Q64 22 77 38Z" fill="url(#gMain)" '+HOL+'/><circle cx="62" cy="26" r="3" fill="#ffd54f"/>'+
+ '<g transform="translate(0 '+p.ty+')"><path d="M92 30 L92 124" stroke="#1b2233" stroke-width="10" stroke-linecap="round"/><path d="M92 30 L92 124" stroke="#9a6a3a" stroke-width="5" stroke-linecap="round"/>'+
+ '<path d="M84 26 Q92 14 100 26" fill="none" stroke="#ffd54f" stroke-width="4" stroke-linecap="round"/>'+
+ '<circle cx="92" cy="30" r="14" fill="#7cf0ff" opacity=".28"/><circle cx="92" cy="30" r="9" fill="url(#gOrb)" stroke="#1b2233" stroke-width="2.5"/>'+
+ '<rect x="76" y="82" width="22" height="10" rx="5" fill="url(#gMain)" '+HOL+'/><circle cx="92" cy="88" r="5" fill="url(#gSkin)" stroke="#1b2233" stroke-width="2"/></g>'+
+ '<g transform="translate('+p.bx+' 0)" opacity="'+p.bo+'"><circle cx="96" cy="30" r="14" fill="#7cf0ff" opacity=".3"/><circle cx="96" cy="30" r="8" fill="url(#gOrb)" stroke="#1b2233" stroke-width="2"/></g></g>';},
+
+giant:function(p){return ''+
+ '<g transform="'+hRot(p.leg,48,96)+'"><rect x="38" y="94" width="19" height="28" rx="7" fill="#8a5a3a" '+HOL+'/><rect x="33" y="114" width="27" height="10" rx="5" fill="#3a2a1a" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,72,96)+'"><rect x="63" y="94" width="19" height="28" rx="7" fill="#8a5a3a" '+HOL+'/><rect x="60" y="114" width="27" height="10" rx="5" fill="#3a2a1a" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M30 58 Q30 46 60 46 Q90 46 90 58 L88 100 Q60 110 32 100Z" fill="url(#gSkin)" '+HOL+'/>'+
+ '<path d="M33 72 L87 72 L88 100 Q60 110 32 100Z" fill="url(#gMain)" '+HOL+'/><path d="M60 52 L60 70 M48 58 Q54 64 60 62 Q66 64 72 58" stroke="#b9764f" stroke-width="2.5" fill="none" stroke-linecap="round"/>'+
+ '<rect x="32" y="89" width="56" height="9" rx="3" fill="#3b2f24" '+HOL+'/><circle cx="60" cy="93.5" r="5" fill="#ffd54f" stroke="#1b2233" stroke-width="2"/>'+
+ '<rect x="13" y="58" width="17" height="34" rx="8" fill="url(#gSkin)" '+HOL+'/><circle cx="21" cy="95" r="12" fill="url(#gSkin)" '+HOL+'/>'+
+ '<path d="M44 32 Q42 12 60 11 Q78 12 76 32 Q70 22 60 24 Q50 22 44 32Z" fill="#d9772b" '+HOL+'/><path d="M74 20 Q92 26 86 52" fill="none" stroke="#d9772b" stroke-width="8" stroke-linecap="round"/>'+
+ '<circle cx="60" cy="36" r="15" fill="url(#gSkin)" '+HOL+'/><path d="M45 31 Q60 22 75 31 Q60 26 45 31Z" fill="#d9772b"/>'+
+ '<circle cx="54" cy="38" r="2.2" fill="#1b2233"/><circle cx="67" cy="38" r="2.2" fill="#1b2233"/><path d="M49 33 L58 36 M72 33 L63 36" stroke="#1b2233" stroke-width="2.8" stroke-linecap="round"/>'+
+ '<path d="M49 46 Q60 52 71 46 Q60 43 49 46Z" fill="#d9772b" '+HOL+'/>'+
+ '<g transform="'+hRot(p.arm,88,62)+'"><rect x="86" y="56" width="17" height="34" rx="8" fill="url(#gSkin)" '+HOL+'/><circle cx="97" cy="94" r="13" fill="url(#gSkin)" '+HOL+'/><path d="M91 90 L91 97 M97 88 L97 99 M103 90 L103 97" stroke="#b9764f" stroke-width="2" stroke-linecap="round"/></g></g>';},
+
+musketeer:function(p){return ''+
+ '<g transform="'+hRot(p.leg,54,98)+'"><rect x="49" y="98" width="10" height="22" rx="4" fill="#3b3350" '+HOL+'/><rect x="46" y="114" width="16" height="9" rx="4" fill="#2a1e14" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,68,98)+'"><rect x="63" y="98" width="10" height="22" rx="4" fill="#3b3350" '+HOL+'/><rect x="60" y="114" width="16" height="9" rx="4" fill="#2a1e14" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M44 100 L48 62 Q60 56 74 62 L80 100 Q62 106 44 100Z" fill="url(#gMain)" '+HOL+'/><path d="M60 58 L60 100" stroke="#fff" stroke-width="2" opacity=".25"/><path d="M48 64 L76 96" stroke="#6b4220" stroke-width="5" stroke-linecap="round"/>'+
+ '<circle cx="62" cy="42" r="14" fill="url(#gSkin)" '+HOL+'/><circle cx="68" cy="42" r="2" fill="#1b2233"/><circle cx="57" cy="42" r="2" fill="#1b2233"/><path d="M52 48 Q62 54 72 48 Q62 46 52 48Z" fill="#5a3a1c" '+HOL+'/>'+
+ '<ellipse cx="62" cy="32" rx="24" ry="6" fill="#2a2240" '+HOL+'/><path d="M47 32 Q49 10 62 10 Q75 10 77 32Z" fill="url(#gMain)" '+HOL+'/><path d="M72 14 Q94 4 92 24" fill="none" stroke="#f4f6fb" stroke-width="4" stroke-linecap="round"/>'+
+ '<g transform="translate('+(p.pull*0.6)+' 0)"><path d="M50 74 L66 66 L68 74 L54 82Z" fill="#8b5a2b" '+HOL+'/><rect x="64" y="66" width="46" height="7" rx="3" fill="#7a869a" '+HOL+'/><rect x="64" y="64" width="46" height="2.5" fill="#b8c2d4"/><circle cx="88" cy="73" r="5.5" fill="url(#gSkin)" stroke="#1b2233" stroke-width="2"/><circle cx="58" cy="76" r="5.5" fill="url(#gSkin)" stroke="#1b2233" stroke-width="2"/></g>'+
+ '<g transform="translate('+(p.bx*0.2)+' 0)" opacity="'+p.bo+'"><path d="M110 69.5 L116 62 L114 69.5 L119 73 L113 72 L112 79 L109 72 L103 73Z" fill="#ffd54f" stroke="#ff8f00" stroke-width="1.5"/></g></g>';},
+
+valkyrie:function(p){return ''+
+ '<g transform="'+hRot(p.leg,55,98)+'"><rect x="50" y="98" width="10" height="22" rx="4" fill="#d9a07a" '+HOL+'/><rect x="46" y="112" width="18" height="11" rx="4" fill="url(#gSteel)" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,67,98)+'"><rect x="62" y="98" width="10" height="22" rx="4" fill="#d9a07a" '+HOL+'/><rect x="58" y="112" width="18" height="11" rx="4" fill="url(#gSteel)" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M46 40 Q34 70 48 96 Q58 72 58 42Z" fill="#e8742a" '+HOL+'/>'+
+ '<path d="M46 92 L76 92 L84 106 Q61 114 38 106Z" fill="url(#gMain)" '+HOL+'/>'+
+ '<path d="M47 64 Q61 58 76 64 L74 92 L49 92Z" fill="url(#gSteel)" '+HOL+'/><rect x="57" y="60" width="9" height="32" fill="url(#gMain)" stroke="#1b2233" stroke-width="2.5"/>'+
+ '<circle cx="46" cy="66" r="7" fill="url(#gSteel)" '+HOL+'/><circle cx="77" cy="66" r="7" fill="url(#gSteel)" '+HOL+'/>'+
+ '<circle cx="61" cy="43" r="13" fill="url(#gSkin)" '+HOL+'/><path d="M47 42 Q45 22 61 21 Q77 22 75 42 Q70 31 61 31 Q52 31 47 42Z" fill="#e8742a" '+HOL+'/>'+
+ '<circle cx="66" cy="44" r="2" fill="#1b2233"/><circle cx="56" cy="44" r="2" fill="#1b2233"/><path d="M58 51 Q61 53 64 51" stroke="#8a3b2a" stroke-width="2" fill="none" stroke-linecap="round"/>'+
+ '<g transform="'+hRot(p.arm*0.9,86,74)+'"><rect x="76" y="64" width="12" height="11" rx="5" fill="url(#gSteel)" '+HOL+'/>'+
+ '<rect x="84" y="24" width="6" height="84" rx="3" fill="#8b5a2b" '+HOL+'/>'+
+ '<path d="M87 28 Q114 16 110 44 Q98 38 87 42Z" fill="url(#gSteel)" '+HOL+'/><path d="M87 104 Q114 114 110 86 Q98 92 87 88Z" fill="url(#gSteel)" '+HOL+'/><circle cx="87" cy="74" r="6" fill="url(#gSkin)" stroke="#1b2233" stroke-width="2"/></g></g>';},
+
+wolf:function(p){return ''+
+ '<path d="M24 86 Q4 72 10 52 Q22 66 30 78Z" fill="#8b94a3" '+HOL+'/>'+
+ '<g transform="'+hRot(p.leg,34,100)+'"><rect x="28" y="97" width="12" height="24" rx="5" fill="#6d7787" '+HOL+'/><ellipse cx="34" cy="121" rx="9" ry="4.5" fill="#4a5262" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,46,100)+'"><rect x="40" y="97" width="12" height="24" rx="5" fill="#6d7787" '+HOL+'/><ellipse cx="46" cy="121" rx="9" ry="4.5" fill="#4a5262" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<ellipse cx="56" cy="88" rx="38" ry="20" fill="url(#gFur)" '+HOL+'/><path d="M30 94 Q56 106 82 94 Q56 100 30 94Z" fill="#f4f6fb" opacity=".6"/>'+
+ '<g transform="'+hRot(p.arm*0.5,84,82)+'"><ellipse cx="84" cy="80" rx="15" ry="15" fill="url(#gFur)" '+HOL+'/>'+
+ '<path d="M80 66 L78 46 L92 60Z M92 60 L98 44 L102 62Z" fill="#6d7787" '+HOL+'/>'+
+ '<ellipse cx="94" cy="72" rx="16" ry="13" fill="url(#gFur)" '+HOL+'/><path d="M100 66 Q118 70 116 79 Q108 85 98 80Z" fill="#aab1bd" '+HOL+'/><circle cx="114" cy="72" r="3.2" fill="#1b2233"/>'+
+ '<circle cx="98" cy="66" r="2.8" fill="#fff" stroke="#1b2233" stroke-width="1.5"/><circle cx="99" cy="66" r="1.2" fill="#1b2233"/><path d="M106 81 L108 87 L111 81Z" fill="#fff" stroke="#1b2233" stroke-width="1.2" stroke-linejoin="round"/>'+
+ '<path d="M80 70 Q86 86 99 84" fill="none" stroke="url(#gMain)" stroke-width="7" stroke-linecap="round"/><path d="M80 70 Q86 86 99 84" fill="none" stroke="#1b2233" stroke-width="1.2" opacity=".5"/></g></g>'+
+ '<g transform="'+hRot(-p.leg,70,100)+'"><rect x="64" y="97" width="12" height="24" rx="5" fill="#808a9b" '+HOL+'/><ellipse cx="70" cy="121" rx="9" ry="4.5" fill="#4a5262" '+HOL+'/></g>'+
+ '<g transform="'+hRot(p.leg,82,100)+'"><rect x="76" y="97" width="12" height="24" rx="5" fill="#808a9b" '+HOL+'/><ellipse cx="82" cy="121" rx="9" ry="4.5" fill="#4a5262" '+HOL+'/></g>';},
+
+hog:function(p){return ''+
+ '<g transform="'+hRot(p.leg,30,98)+'"><rect x="24" y="94" width="13" height="26" rx="5" fill="#a86a50" '+HOL+'/><ellipse cx="30" cy="121" rx="8" ry="4.5" fill="#3a2a1a" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,42,98)+'"><rect x="36" y="94" width="13" height="26" rx="5" fill="#a86a50" '+HOL+'/><ellipse cx="42" cy="121" rx="8" ry="4.5" fill="#3a2a1a" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,80,98)+'"><rect x="74" y="94" width="13" height="26" rx="5" fill="#a86a50" '+HOL+'/><ellipse cx="80" cy="121" rx="8" ry="4.5" fill="#3a2a1a" '+HOL+'/></g>'+
+ '<g transform="'+hRot(p.leg,92,98)+'"><rect x="86" y="94" width="13" height="26" rx="5" fill="#a86a50" '+HOL+'/><ellipse cx="92" cy="121" rx="8" ry="4.5" fill="#3a2a1a" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M20 78 Q6 72 10 58 Q18 66 26 72Z" fill="#c98f74" '+HOL+'/>'+
+ '<ellipse cx="56" cy="86" rx="38" ry="22" fill="url(#gHog)" '+HOL+'/>'+
+ '<path d="M36 68 Q56 62 76 68 L80 90 Q56 98 32 90Z" fill="url(#gMain)" '+HOL+'/><path d="M34 86 Q56 94 78 86" stroke="#ffd54f" stroke-width="3" fill="none"/>'+
+ '<ellipse cx="97" cy="84" rx="15" ry="14" fill="url(#gHog)" '+HOL+'/><ellipse cx="109" cy="89" rx="8" ry="7" fill="#f2bda4" '+HOL+'/><circle cx="107" cy="88" r="1.6" fill="#1b2233"/><circle cx="112" cy="88" r="1.6" fill="#1b2233"/>'+
+ '<path d="M102 96 L107 104 L109 95Z" fill="#fff8e1" stroke="#1b2233" stroke-width="1.8" stroke-linejoin="round"/><path d="M88 74 L84 62 L96 70Z" fill="#c98f74" '+HOL+'/><circle cx="99" cy="79" r="2.4" fill="#1b2233"/>'+
+ '<path d="M50 64 L70 64 L74 76 L46 76Z" fill="url(#gMain)" '+HOL+'/>'+
+ '<path d="M52 66 Q50 44 60 40 Q70 44 68 66Z" fill="url(#gSkin)" '+HOL+'/>'+
+ '<circle cx="61" cy="30" r="11" fill="url(#gSkin)" '+HOL+'/><path d="M53 24 Q60 2 70 22 Q62 16 53 24Z" fill="#2a1e14" '+HOL+'/>'+
+ '<circle cx="65" cy="31" r="1.8" fill="#1b2233"/><circle cx="57" cy="31" r="1.8" fill="#1b2233"/><path d="M54 36 Q61 46 68 36 Q61 40 54 36Z" fill="#2a1e14"/>'+
+ '<g transform="'+hRot(p.arm,66,48)+'"><rect x="64" y="44" width="22" height="9" rx="4" fill="url(#gSkin)" '+HOL+'/><rect x="85" y="10" width="5" height="44" rx="2" fill="#8b5a2b" '+HOL+'/><rect x="76" y="4" width="23" height="14" rx="3" fill="url(#gSteel)" '+HOL+'/><circle cx="87" cy="48" r="5" fill="url(#gSkin)" stroke="#1b2233" stroke-width="2"/></g></g>';},
+
+prince:function(p){return ''+
+ '<g transform="'+hRot(p.leg,32,98)+'"><rect x="26" y="94" width="11" height="26" rx="4" fill="#8a5530" '+HOL+'/><rect x="24" y="115" width="15" height="8" rx="3" fill="#2a1e14" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,44,98)+'"><rect x="38" y="94" width="11" height="26" rx="4" fill="#8a5530" '+HOL+'/><rect x="36" y="115" width="15" height="8" rx="3" fill="#2a1e14" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,76,98)+'"><rect x="70" y="94" width="11" height="26" rx="4" fill="#8a5530" '+HOL+'/><rect x="68" y="115" width="15" height="8" rx="3" fill="#2a1e14" '+HOL+'/></g>'+
+ '<g transform="'+hRot(p.leg,88,98)+'"><rect x="82" y="94" width="11" height="26" rx="4" fill="#8a5530" '+HOL+'/><rect x="80" y="115" width="15" height="8" rx="3" fill="#2a1e14" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M20 78 Q4 92 12 112 Q22 96 26 84Z" fill="#3a2a1a" '+HOL+'/>'+
+ '<ellipse cx="54" cy="86" rx="34" ry="19" fill="url(#gHorse)" '+HOL+'/>'+
+ '<path d="M70 78 Q82 54 90 44 L104 56 Q94 64 88 88Z" fill="url(#gHorse)" '+HOL+'/>'+
+ '<path d="M92 44 Q108 40 114 56 Q108 68 98 62Z" fill="url(#gHorse)" '+HOL+'/><circle cx="106" cy="52" r="2.2" fill="#1b2233"/><circle cx="111" cy="60" r="1.6" fill="#1b2233"/><path d="M94 44 L96 33 L103 42Z" fill="#8a5530" '+HOL+'/>'+
+ '<path d="M92 44 Q80 52 74 76" fill="none" stroke="#2a1e14" stroke-width="6" stroke-linecap="round"/>'+
+ '<path d="M32 74 L76 74 L80 96 Q54 102 28 96Z" fill="url(#gMain)" '+HOL+'/><path d="M30 92 Q54 99 78 92" stroke="#ffd54f" stroke-width="3" fill="none"/>'+
+ '<rect x="50" y="68" width="14" height="14" rx="5" fill="url(#gSteel)" '+HOL+'/><rect x="52" y="80" width="12" height="9" rx="3" fill="#6c7890" '+HOL+'/>'+
+ '<path d="M44 70 L66 70 L68 46 Q56 38 46 46Z" fill="url(#gSteel)" '+HOL+'/><path d="M53 48 L60 48 L58 70 L54 70Z" fill="url(#gMain)" stroke="#1b2233" stroke-width="2"/>'+
+ '<path d="M47 38 Q47 24 58 24 Q69 24 69 38 L69 46 L47 46Z" fill="url(#gSteel)" '+HOL+'/><rect x="50" y="36" width="19" height="5" rx="2.5" fill="#121722"/>'+
+ '<path d="M48 26 L50 12 L55 20 L58 10 L62 20 L66 12 L68 26Z" fill="#ffd54f" '+HOL+'/>'+
+ '<g transform="'+hRot(p.arm*0.5,62,56)+'"><rect x="38" y="53" width="74" height="5" rx="2" fill="#e8d9b0" '+HOL+'/><path d="M108 51 L121 55.5 L108 60Z" fill="url(#gSteel)" '+HOL+'/><path d="M88 53 L106 45 L104 53Z" fill="url(#gMain)" '+HOL+'/><circle cx="62" cy="56" r="5.5" fill="url(#gSkin)" stroke="#1b2233" stroke-width="2"/></g></g>';},
+
+pekka:function(p){return ''+
+ '<g transform="'+hRot(p.leg,51,96)+'"><rect x="45" y="94" width="13" height="26" rx="5" fill="url(#gDark)" '+HOL+'/><rect x="41" y="113" width="20" height="10" rx="4" fill="#11151f" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,69,96)+'"><rect x="62" y="94" width="13" height="26" rx="5" fill="url(#gDark)" '+HOL+'/><rect x="58" y="113" width="20" height="10" rx="4" fill="#11151f" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M38 62 Q38 54 60 54 Q82 54 82 62 L84 98 Q60 106 36 98Z" fill="url(#gDark)" '+HOL+'/>'+
+ '<path d="M50 60 L70 60 L66 84 L54 84Z" fill="url(#gMain)" stroke="#1b2233" stroke-width="2.5" stroke-linejoin="round"/>'+
+ '<rect x="37" y="90" width="47" height="7" rx="2" fill="#11151f" '+HOL+'/>'+
+ '<circle cx="38" cy="64" r="9" fill="url(#gDark)" '+HOL+'/><path d="M32 58 L36 48 L42 58Z" fill="#aab6ca" '+HOL+'/>'+
+ '<path d="M42 40 Q42 20 60 20 Q78 20 78 40 L78 50 Q60 56 42 50Z" fill="url(#gDark)" '+HOL+'/>'+
+ '<path d="M44 28 Q28 22 26 6 Q38 14 48 22Z" fill="url(#gSteel)" '+HOL+'/><path d="M76 28 Q92 22 94 6 Q82 14 72 22Z" fill="url(#gSteel)" '+HOL+'/>'+
+ '<rect x="47" y="36" width="26" height="8" rx="3" fill="#0b0e16"/><circle cx="54" cy="40" r="2.4" fill="#7cf0ff"/><circle cx="66" cy="40" r="2.4" fill="#7cf0ff"/>'+
+ '<g transform="'+hRot(p.arm,84,72)+'"><rect x="79" y="62" width="12" height="26" rx="6" fill="url(#gDark)" '+HOL+'/>'+
+ '<path d="M82 88 L84 14 L96 24 L94 88Z" fill="#c5d0e6" stroke="#1b2233" stroke-width="2.5" stroke-linejoin="round"/><path d="M89 22 L88.5 84" stroke="#eef3fb" stroke-width="2.5"/>'+
+ '<rect x="75" y="84" width="26" height="7" rx="3" fill="url(#gMain)" stroke="#1b2233" stroke-width="2.5"/><circle cx="88" cy="96" r="4" fill="#11151f" stroke="#1b2233" stroke-width="2"/></g></g>';},
+
+skeleton:function(p){const O2='stroke="#1b2233" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"';return ''+
+ '<g transform="'+hRot(p.leg,53,100)+'"><rect x="50" y="100" width="6" height="20" rx="3" fill="#f1eedc" '+O2+'/><ellipse cx="54" cy="121" rx="8" ry="3.5" fill="#e8e4cf" '+O2+'/></g>'+
+ '<g transform="'+hRot(-p.leg,67,100)+'"><rect x="64" y="100" width="6" height="20" rx="3" fill="#f1eedc" '+O2+'/><ellipse cx="68" cy="121" rx="8" ry="3.5" fill="#e8e4cf" '+O2+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<ellipse cx="60" cy="98" rx="12" ry="5" fill="#e8e4cf" '+O2+'/>'+
+ '<path d="M44 62 Q60 56 76 62 L72 92 Q60 98 48 92Z" fill="#f4f1e4" '+O2+'/><path d="M48 70 L72 70 M48 78 L72 78 M49 86 L71 86 M60 58 L60 96" stroke="#1b2233" stroke-width="2" fill="none"/>'+
+ '<rect x="41" y="64" width="6" height="22" rx="3" fill="#f1eedc" '+O2+'/>'+
+ '<path d="M45 60 Q60 70 75 60 L75 69 Q60 79 45 69Z" fill="url(#gMain)" '+HOL+'/>'+
+ '<circle cx="60" cy="40" r="17" fill="#f7f4e6" '+HOL+'/><rect x="50" y="50" width="20" height="9" rx="3" fill="#efeadb" '+O2+'/>'+
+ '<ellipse cx="53" cy="38" rx="4.5" ry="5.5" fill="#1b2233"/><ellipse cx="67" cy="38" rx="4.5" ry="5.5" fill="#1b2233"/><circle cx="53" cy="39" r="1.4" fill="#7cf0ff"/><circle cx="67" cy="39" r="1.4" fill="#7cf0ff"/>'+
+ '<path d="M59 45 L61 45 L60 49Z" fill="#1b2233"/><path d="M54 55 L54 59 M58 55 L58 59 M62 55 L62 59 M66 55 L66 59" stroke="#1b2233" stroke-width="1.6"/>'+
+ '<g transform="'+hRot(p.arm,74,66)+'"><rect x="72" y="62" width="6" height="24" rx="3" fill="#f1eedc" '+O2+'/><circle cx="75" cy="88" r="4" fill="#f1eedc" '+O2+'/>'+
+ '<path d="M72 86 L74 38 L79 38 L80 86Z" fill="#aeb6c0" '+O2+'/><rect x="68" y="84" width="14" height="4" rx="2" fill="#6b4220" '+O2+'/></g></g>';},
+
+bomber:function(p){return ''+
+ '<g transform="'+hRot(p.leg,54,100)+'"><rect x="49" y="100" width="10" height="20" rx="4" fill="#4a3a2a" '+HOL+'/><rect x="45" y="114" width="17" height="9" rx="4" fill="#2a1e14" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,68,100)+'"><rect x="63" y="100" width="10" height="20" rx="4" fill="#4a3a2a" '+HOL+'/><rect x="59" y="114" width="17" height="9" rx="4" fill="#2a1e14" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<rect x="42" y="64" width="10" height="22" rx="5" fill="url(#gSkin)" '+HOL+'/>'+
+ '<path d="M44 98 L48 62 Q60 56 74 62 L78 98 Q61 104 44 98Z" fill="#8a6a4a" '+HOL+'/><path d="M50 66 L72 66 L74 98 Q61 102 48 98Z" fill="url(#gMain)" '+HOL+'/><path d="M50 88 L72 88" stroke="#3a2a1a" stroke-width="4"/><circle cx="61" cy="88" r="3" fill="#ffd54f" stroke="#1b2233" stroke-width="1.5"/>'+
+ '<circle cx="61" cy="42" r="15" fill="url(#gSkin)" '+HOL+'/>'+
+ '<path d="M45 40 Q46 20 61 20 Q76 20 77 40 Q61 33 45 40Z" fill="url(#gMain)" '+HOL+'/><path d="M46 41 L76 41" stroke="#3a2a1a" stroke-width="3"/>'+
+ '<circle cx="54" cy="41" r="5.5" fill="#9fe3ff" stroke="#ffd54f" stroke-width="2.5"/><circle cx="68" cy="41" r="5.5" fill="#9fe3ff" stroke="#ffd54f" stroke-width="2.5"/><circle cx="55" cy="41" r="1.6" fill="#1b2233"/><circle cx="69" cy="41" r="1.6" fill="#1b2233"/>'+
+ '<path d="M54 50 Q61 57 68 50" stroke="#8a3b2a" stroke-width="2.4" fill="none" stroke-linecap="round"/>'+
+ '<g transform="'+hRot(p.arm,74,66)+'"><rect x="72" y="60" width="12" height="22" rx="5" fill="url(#gSkin)" '+HOL+'/>'+
+ '<g opacity="'+p.ao+'"><circle cx="86" cy="92" r="11" fill="#2b2f3a" '+HOL+'/><circle cx="82" cy="88" r="3" fill="#fff" opacity=".35"/><path d="M86 81 Q90 74 95 76" stroke="#8b5a2b" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="96" cy="75" r="3.5" fill="#ffd54f" stroke="#ff8f00" stroke-width="1.5"/></g>'+
+ '<circle cx="80" cy="84" r="5" fill="url(#gSkin)" stroke="#1b2233" stroke-width="2"/></g></g>';},
+
+witch:function(p){return ''+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M38 122 L44 62 Q60 54 76 62 L82 122 Q60 130 38 122Z" fill="url(#gWitch)" '+HOL+'/><path d="M52 66 L56 124 M68 66 L64 124" stroke="#fff" stroke-width="2" opacity=".15"/>'+
+ '<path d="M43 86 Q60 96 79 86 L79 94 Q60 104 43 94Z" fill="url(#gMain)" '+HOL+'/>'+
+ '<path d="M44 44 Q34 70 46 96 Q54 70 52 48Z" fill="#1b1426" '+HOL+'/>'+
+ '<circle cx="42" cy="68" r="8" fill="url(#gWitch)" '+HOL+'/>'+
+ '<circle cx="60" cy="48" r="13" fill="#f1dccb" '+HOL+'/><circle cx="55" cy="49" r="2" fill="#3ddc84"/><circle cx="66" cy="49" r="2" fill="#3ddc84"/><path d="M55 55 Q60 58 66 55" stroke="#8a3b6a" stroke-width="2" fill="none" stroke-linecap="round"/>'+
+ '<ellipse cx="60" cy="40" rx="26" ry="7" fill="#2a1545" '+HOL+'/>'+
+ '<path d="M44 38 Q50 16 70 4 Q66 22 77 38Z" fill="#2a1545" '+HOL+'/><path d="M45 35 Q60 41 76 35 L77 29 Q60 35 44 29Z" fill="url(#gMain)" stroke="#1b2233" stroke-width="2"/>'+
+ '<g transform="translate(0 '+p.ty+')"><path d="M92 36 L92 124" stroke="#1b2233" stroke-width="10" stroke-linecap="round"/><path d="M92 36 L92 124" stroke="#6b4220" stroke-width="5" stroke-linecap="round"/>'+
+ '<circle cx="92" cy="30" r="15" fill="#7dff7d" opacity=".28"/><circle cx="92" cy="30" r="9" fill="#f4f1e4" '+HOL+'/><circle cx="89" cy="29" r="2" fill="#1b2233"/><circle cx="95" cy="29" r="2" fill="#1b2233"/><path d="M89 35 L95 35" stroke="#1b2233" stroke-width="1.6"/>'+
+ '<rect x="76" y="82" width="22" height="10" rx="5" fill="url(#gWitch)" '+HOL+'/><circle cx="92" cy="88" r="5" fill="#f1dccb" stroke="#1b2233" stroke-width="2"/></g>'+
+ '<g transform="translate('+p.bx+' 0)" opacity="'+p.bo+'"><circle cx="96" cy="30" r="14" fill="#7dff7d" opacity=".3"/><circle cx="96" cy="30" r="8" fill="#b6ff8f" stroke="#1b2233" stroke-width="2"/></g></g>';},
+
+minion:function(p){return ''+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<g transform="'+hRot(p.leg,48,68)+'"><path d="M48 66 Q20 38 8 54 Q20 58 18 72 Q32 68 48 76Z" fill="url(#gMain)" '+HOL+'/><path d="M44 68 Q26 52 16 58" stroke="#fff" stroke-width="2" opacity=".3" fill="none"/></g>'+
+ '<g transform="'+hRot(-p.leg,72,68)+'"><path d="M72 66 Q100 38 112 54 Q100 58 102 72 Q88 68 72 76Z" fill="url(#gMain)" '+HOL+'/><path d="M76 68 Q94 52 104 58" stroke="#fff" stroke-width="2" opacity=".3" fill="none"/></g>'+
+ '<path d="M52 96 L49 114 L55 111 L58 98Z M68 96 L71 114 L65 111 L62 98Z" fill="#5a7aa3" '+HOL+'/>'+
+ '<ellipse cx="60" cy="82" rx="16" ry="20" fill="url(#gMinion)" '+HOL+'/><ellipse cx="60" cy="87" rx="9" ry="12" fill="#d3e0f2" opacity=".75"/>'+
+ '<rect x="40" y="72" width="8" height="20" rx="4" fill="url(#gMinion)" '+HOL+'/>'+
+ '<g transform="'+hRot(p.arm,72,74)+'"><rect x="70" y="70" width="8" height="22" rx="4" fill="url(#gMinion)" '+HOL+'/><path d="M69 92 L74 104 L79 92Z" fill="#f4f6fb" '+HOL+'/></g>'+
+ '<circle cx="60" cy="54" r="15" fill="url(#gMinion)" '+HOL+'/>'+
+ '<path d="M49 44 L43 29 L56 40Z M71 44 L77 29 L64 40Z" fill="#f4f1e4" '+HOL+'/>'+
+ '<ellipse cx="54" cy="54" rx="4.5" ry="5" fill="#fff" stroke="#1b2233" stroke-width="2"/><ellipse cx="66" cy="54" rx="4.5" ry="5" fill="#fff" stroke="#1b2233" stroke-width="2"/><circle cx="55" cy="55" r="2" fill="#1b2233"/><circle cx="65" cy="55" r="2" fill="#1b2233"/>'+
+ '<path d="M47 47 L57 50 M73 47 L63 50" stroke="#1b2233" stroke-width="3" stroke-linecap="round"/>'+
+ '<path d="M52 62 Q60 69 68 62 Q60 64 52 62Z" fill="#3a1d1d" stroke="#1b2233" stroke-width="2"/><path d="M55 63 L56 67 L58 63 M62 63 L64 67 L65 63" fill="#fff" stroke="#1b2233" stroke-width="1.2"/></g>';},
+
+bat:function(p){return ''+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<g transform="'+hRot(p.leg,50,80)+'"><path d="M50 78 Q14 50 4 78 Q16 76 18 92 Q30 82 36 96 Q44 86 52 90Z" fill="url(#gMain)" '+HOL+'/><path d="M50 80 L12 76 M50 82 L24 90 M50 84 L38 96" stroke="#1b2233" stroke-width="1.8" opacity=".5"/></g>'+
+ '<g transform="'+hRot(-p.leg,70,80)+'"><path d="M70 78 Q106 50 116 78 Q104 76 102 92 Q90 82 84 96 Q76 86 68 90Z" fill="url(#gMain)" '+HOL+'/><path d="M70 80 L108 76 M70 82 L96 90 M70 84 L82 96" stroke="#1b2233" stroke-width="1.8" opacity=".5"/></g>'+
+ '<ellipse cx="60" cy="88" rx="11" ry="15" fill="#3a2a4a" '+HOL+'/><path d="M54 102 L52 112 L57 108Z M66 102 L68 112 L63 108Z" fill="#2a1e38" '+HOL+'/>'+
+ '<g transform="translate('+(p.arm*0.25)+' 0)"><path d="M50 60 L45 40 L58 54Z M70 60 L75 40 L62 54Z" fill="#4a3860" '+HOL+'/><path d="M49 55 L47 46 L54 53Z M71 55 L73 46 L66 53Z" fill="#d98fb5"/>'+
+ '<circle cx="60" cy="66" r="12" fill="#4a3860" '+HOL+'/><circle cx="55" cy="64" r="3.2" fill="#ffd54f" stroke="#1b2233" stroke-width="1.6"/><circle cx="65" cy="64" r="3.2" fill="#ffd54f" stroke="#1b2233" stroke-width="1.6"/><circle cx="55" cy="64.5" r="1.2" fill="#1b2233"/><circle cx="65" cy="64.5" r="1.2" fill="#1b2233"/>'+
+ '<path d="M53 72 Q60 76 67 72Z" fill="#2a1030" stroke="#1b2233" stroke-width="1.6"/><path d="M55 72 L57 78 L59 72 M61 72 L63 78 L65 72" fill="#fff" stroke="#1b2233" stroke-width="1.2" stroke-linejoin="round"/></g></g>';},
+
+dragon:function(p){const el=(p.v==='edragon');return ''+
+ '<g transform="'+hRot(p.leg,52,66)+'"><path d="M50 66 Q24 26 6 40 Q18 48 14 60 Q28 54 30 68 Q40 62 52 74Z" fill="url(#gMain)" '+HOL+'/><path d="M48 64 Q28 38 14 44 M46 68 Q32 56 22 60" stroke="#1b2233" stroke-width="1.8" opacity=".45" fill="none"/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M32 86 Q10 96 8 118 Q22 106 36 98Z" fill="url(#gDragon)" '+HOL+'/><path d="M8 118 L2 124 L14 120Z" fill="#fff3c4" '+HOL+'/>'+
+ '<ellipse cx="54" cy="84" rx="30" ry="20" fill="url(#gDragon)" '+HOL+'/><ellipse cx="58" cy="92" rx="18" ry="10" fill="#fff3c4" opacity=".85"/>'+
+ '<path d="M40 66 L44 56 L50 65Z M52 64 L57 53 L62 64Z M64 66 L69 56 L74 68Z" fill="#fff3c4" '+HOL+'/>'+
+ '<rect x="42" y="98" width="10" height="16" rx="4" fill="url(#gDragon)" '+HOL+'/><path d="M40 114 L52 114 L50 120 L42 120Z" fill="#fff3c4" '+HOL+'/>'+
+ '<rect x="62" y="98" width="10" height="16" rx="4" fill="url(#gDragon)" '+HOL+'/><path d="M60 114 L72 114 L70 120 L62 120Z" fill="#fff3c4" '+HOL+'/>'+
+ '<path d="M70 76 Q82 56 88 52 L100 62 Q90 66 84 88Z" fill="url(#gDragon)" '+HOL+'/>'+
+ '<g transform="translate('+(p.arm*0.1)+' 0)"><ellipse cx="96" cy="60" rx="14" ry="11" fill="url(#gDragon)" '+HOL+'/><ellipse cx="108" cy="64" rx="9" ry="7" fill="url(#gDragon)" '+HOL+'/><circle cx="108" cy="61" r="1.4" fill="#1b2233"/>'+
+ '<path d="M90 50 L82 36 L97 47Z" fill="#fff3c4" '+HOL+'/><circle cx="98" cy="57" r="3.4" fill="#fff" stroke="#1b2233" stroke-width="1.8"/><circle cx="99" cy="57.5" r="1.4" fill="#1b2233"/></g>'+
+ (el?'<g opacity="'+p.bo+'"><path d="M116 62 L124 58 L121 64 L131 62 L122 70 L124 66 L116 68Z" fill="#fff59d" stroke="#ffb300" stroke-width="1.6" stroke-linejoin="round"/></g>':
+     '<g opacity="'+p.bo+'" transform="translate('+(p.bx*0.4)+' 0)"><path d="M113 62 Q122 44 131 56 Q128 62 133 66 Q124 84 113 70Z" fill="#ffb300" stroke="#ff8f00" stroke-width="1.5" stroke-linejoin="round"/><path d="M113 64 Q121 54 127 61 Q125 68 129 68 Q122 78 113 69Z" fill="#ff5722"/></g>')+
+ '</g>';},
+
+ghost:function(p){return ''+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M36 60 Q36 30 60 30 Q84 30 84 60 L88 98 Q80 106 74 99 Q68 112 60 102 Q52 114 46 102 Q40 108 32 99Z" fill="url(#gGhost)" '+HOL+' opacity=".95"/>'+
+ '<path d="M32 99 Q34 108 38 112" stroke="#1b2233" stroke-width="0"/>'+
+ '<path d="M42 54 Q42 22 60 22 Q78 22 78 54 Q70 46 60 46 Q50 46 42 54Z" fill="url(#gMain)" '+HOL+'/>'+
+ '<ellipse cx="60" cy="50" rx="13" ry="10" fill="#1a1030"/><circle cx="55" cy="50" r="3.2" fill="#7cf0ff"/><circle cx="65" cy="50" r="3.2" fill="#7cf0ff"/>'+
+ (p.v==='royalGhost'?'<path d="M48 26 L50 14 L55 22 L60 12 L65 22 L70 14 L72 26Z" fill="#ffd54f" '+HOL+'/>':'')+
+ '<path d="M38 72 Q60 82 82 72 L82 81 Q60 91 38 81Z" fill="url(#gMain)" '+HOL+'/>'+
+ '<g transform="'+hRot(p.arm,78,70)+'"><path d="M74 64 L92 76 L88 86 L72 76Z" fill="url(#gGhost)" '+HOL+'/><path d="M90 80 L112 54 L115 58 L95 86Z" fill="url(#gSteel)" '+HOL+'/><circle cx="91" cy="82" r="4" fill="#d8ccf5" stroke="#1b2233" stroke-width="2"/></g></g>';},
+
+golem:function(p){return ''+
+ '<g transform="'+hRot(p.leg,45,96)+'"><rect x="33" y="92" width="24" height="30" rx="7" fill="url(#gStone)" '+HOL+'/><rect x="30" y="114" width="30" height="10" rx="4" fill="#5a5f6b" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,75,96)+'"><rect x="63" y="92" width="24" height="30" rx="7" fill="url(#gStone)" '+HOL+'/><rect x="60" y="114" width="30" height="10" rx="4" fill="#5a5f6b" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M24 54 Q24 38 60 38 Q96 38 96 54 L92 100 Q60 110 28 100Z" fill="url(#gStone)" '+HOL+'/>'+
+ '<path d="M36 52 L44 66 L38 80 M82 48 L76 64 L86 78 M60 90 L54 100" stroke="#4a4f5a" stroke-width="2.5" fill="none" stroke-linecap="round"/>'+
+ '<ellipse cx="34" cy="86" rx="8" ry="4" fill="#6fae5a" opacity=".85"/><ellipse cx="84" cy="44" rx="9" ry="4" fill="#6fae5a" opacity=".85"/>'+
+ '<circle cx="60" cy="72" r="10" fill="#1b2233"/><circle cx="60" cy="72" r="7" fill="url(#gMain)"/><circle cx="58" cy="70" r="2.5" fill="#fff" opacity=".7"/>'+
+ '<circle cx="24" cy="58" r="12" fill="url(#gStone)" '+HOL+'/><circle cx="96" cy="58" r="12" fill="url(#gStone)" '+HOL+'/>'+
+ '<rect x="46" y="14" width="28" height="26" rx="7" fill="url(#gStone)" '+HOL+'/><rect x="51" y="22" width="7" height="6" rx="2" fill="url(#gMain)"/><rect x="62" y="22" width="7" height="6" rx="2" fill="url(#gMain)"/><path d="M52 33 L68 33" stroke="#1b2233" stroke-width="2.5"/>'+
+ '<rect x="6" y="58" width="16" height="38" rx="8" fill="url(#gStone)" '+HOL+'/><circle cx="14" cy="100" r="13" fill="url(#gStone)" '+HOL+'/>'+
+ '<g transform="'+hRot(p.arm*0.8,100,62)+'"><rect x="96" y="58" width="16" height="38" rx="8" fill="url(#gStone)" '+HOL+'/><circle cx="104" cy="100" r="14" fill="url(#gStone)" '+HOL+'/><path d="M98 96 L110 104" stroke="#4a4f5a" stroke-width="2"/></g></g>';},
+
+megaKnight:function(p){return ''+
+ '<g transform="'+hRot(p.leg,50,96)+'"><rect x="42" y="92" width="16" height="28" rx="6" fill="url(#gDark)" '+HOL+'/><rect x="38" y="113" width="24" height="10" rx="4" fill="#11151f" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,70,96)+'"><rect x="62" y="92" width="16" height="28" rx="6" fill="url(#gDark)" '+HOL+'/><rect x="58" y="113" width="24" height="10" rx="4" fill="#11151f" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M36 58 Q8 86 16 120 Q40 114 52 102Z" fill="url(#gMain)" '+HOL+'/>'+
+ '<path d="M32 62 Q32 52 60 52 Q88 52 88 62 L90 100 Q60 110 30 100Z" fill="url(#gDark)" '+HOL+'/>'+
+ '<path d="M46 58 L74 58 L70 92 L50 92Z" fill="url(#gMain)" stroke="#1b2233" stroke-width="2.5" stroke-linejoin="round"/><path d="M50 66 L70 66 M52 76 L68 76" stroke="#ffd54f" stroke-width="2.5" stroke-linecap="round"/>'+
+ '<rect x="31" y="90" width="58" height="8" rx="3" fill="#11151f" '+HOL+'/><circle cx="60" cy="94" r="4" fill="#ffd54f" stroke="#1b2233" stroke-width="2"/>'+
+ '<circle cx="32" cy="64" r="11" fill="url(#gDark)" '+HOL+'/><path d="M25 56 L22 42 L33 53Z" fill="url(#gSteel)" '+HOL+'/>'+
+ '<circle cx="30" cy="92" r="7" fill="url(#gDark)" '+HOL+'/>'+
+ '<path d="M42 38 Q42 16 60 16 Q78 16 78 38 L78 50 Q60 58 42 50Z" fill="url(#gDark)" '+HOL+'/>'+
+ '<path d="M44 26 Q30 20 26 4 Q40 10 48 20Z" fill="url(#gSteel)" '+HOL+'/><path d="M76 26 Q90 20 94 4 Q80 10 72 20Z" fill="url(#gSteel)" '+HOL+'/>'+
+ '<rect x="47" y="34" width="26" height="8" rx="3" fill="#0b0e16"/><circle cx="54" cy="38" r="2.4" fill="#ffa726"/><circle cx="66" cy="38" r="2.4" fill="#ffa726"/>'+
+ '<g transform="'+hRot(p.arm,92,72)+'"><rect x="86" y="62" width="14" height="26" rx="6" fill="url(#gDark)" '+HOL+'/><rect x="93" y="22" width="7" height="76" rx="3" fill="#6b4220" '+HOL+'/>'+
+ '<rect x="80" y="8" width="34" height="22" rx="4" fill="url(#gSteel)" '+HOL+'/><path d="M84 8 L88 0 L92 8 M96 8 L100 0 L104 8 M108 8 L112 2" stroke="#1b2233" stroke-width="2.5" fill="#aab6ca" stroke-linejoin="round"/><circle cx="96" cy="88" r="6" fill="url(#gDark)" stroke="#1b2233" stroke-width="2"/></g></g>';},
+
+eliteBarb:function(p){return ''+
+ '<g transform="'+hRot(p.leg,54,98)+'"><rect x="48" y="96" width="11" height="22" rx="4" fill="url(#gSkin)" '+HOL+'/><rect x="45" y="110" width="17" height="12" rx="5" fill="#8a6a4a" '+HOL+'/><ellipse cx="53.5" cy="110" rx="9" ry="3.5" fill="#f4f1e4" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,68,98)+'"><rect x="62" y="96" width="11" height="22" rx="4" fill="url(#gSkin)" '+HOL+'/><rect x="59" y="110" width="17" height="12" rx="5" fill="#8a6a4a" '+HOL+'/><ellipse cx="67.5" cy="110" rx="9" ry="3.5" fill="#f4f1e4" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<rect x="34" y="62" width="10" height="26" rx="5" fill="url(#gSkin)" '+HOL+'/>'+
+ '<path d="M42 62 Q60 54 78 62 L74 92 L46 92Z" fill="url(#gSkin)" '+HOL+'/><path d="M52 70 L68 70 M54 78 L66 78 M60 64 L60 88" stroke="#c98f5f" stroke-width="2" stroke-linecap="round"/>'+
+ '<path d="M44 90 L76 90 L80 108 L40 108Z" fill="url(#gMain)" '+HOL+'/><rect x="44" y="86" width="32" height="6" fill="#3b2f24" '+HOL+'/>'+
+ '<path d="M45 40 Q36 62 46 78 Q50 60 52 44Z" fill="#f1c43a" '+HOL+'/>'+
+ '<circle cx="60" cy="42" r="14" fill="url(#gSkin)" '+HOL+'/>'+
+ '<path d="M45 40 Q44 22 60 22 Q76 22 75 40 Q72 30 60 30 Q50 30 45 40Z" fill="#f1c43a" '+HOL+'/>'+
+ '<path d="M46 32 Q60 24 74 32 L74 37 Q60 29 46 37Z" fill="url(#gSteel)" '+HOL+'/><path d="M47 32 Q36 28 36 16 Q46 20 52 28Z M73 32 Q84 28 84 16 Q74 20 68 28Z" fill="#f4f1e4" '+HOL+'/>'+
+ '<circle cx="66" cy="43" r="2" fill="#1b2233"/><circle cx="55" cy="43" r="2" fill="#1b2233"/><path d="M50 38 L58 41 M70 38 L62 41" stroke="#1b2233" stroke-width="2.6" stroke-linecap="round"/>'+
+ '<path d="M50 50 Q60 68 70 50 Q60 55 50 50Z" fill="#f1c43a" '+HOL+'/>'+
+ '<g transform="'+hRot(p.arm,80,70)+'"><rect x="76" y="62" width="10" height="26" rx="5" fill="url(#gSkin)" '+HOL+'/><circle cx="81" cy="90" r="6" fill="url(#gSkin)" '+HOL+'/>'+
+ '<path d="M77 90 L80 22 L88 22 L87 90Z" fill="#eef3fb" stroke="#1b2233" stroke-width="2.5" stroke-linejoin="round"/><path d="M83 26 L82.5 84" stroke="#b6c2d8" stroke-width="2"/><rect x="72" y="88" width="20" height="6" rx="3" fill="#ffd54f" stroke="#1b2233" stroke-width="2.5"/></g></g>';},
+
+lumberjack:function(p){return ''+
+ '<g transform="'+hRot(p.leg,54,98)+'"><rect x="48" y="98" width="11" height="22" rx="4" fill="#3a4f7a" '+HOL+'/><rect x="45" y="113" width="17" height="10" rx="4" fill="#2a1e14" '+HOL+'/></g>'+
+ '<g transform="'+hRot(-p.leg,68,98)+'"><rect x="62" y="98" width="11" height="22" rx="4" fill="#3a4f7a" '+HOL+'/><rect x="59" y="113" width="17" height="10" rx="4" fill="#2a1e14" '+HOL+'/></g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<rect x="40" y="64" width="10" height="24" rx="5" fill="url(#gMain)" '+HOL+'/>'+
+ '<path d="M44 100 L47 62 Q60 56 75 62 L78 100 Q61 106 44 100Z" fill="url(#gMain)" '+HOL+'/>'+
+ '<path d="M52 62 L52 102 M60 60 L60 104 M68 62 L68 102 M45 76 L77 76 M44 90 L78 90" stroke="#fff" stroke-width="2.2" opacity=".28"/><path d="M56 62 L56 102 M64 62 L64 102 M46 83 L77 83" stroke="#1b2233" stroke-width="2" opacity=".3"/>'+
+ '<path d="M50 62 L50 100 M72 62 L72 100" stroke="#3a2a1a" stroke-width="3.5"/><rect x="44" y="96" width="34" height="5" fill="#3a2a1a" '+HOL+'/>'+
+ '<circle cx="61" cy="42" r="14" fill="url(#gSkin)" '+HOL+'/>'+
+ '<path d="M46 40 Q47 20 61 20 Q75 20 76 40Z" fill="#d9a441" '+HOL+'/><rect x="45" y="34" width="32" height="7" rx="3" fill="#b8832a" '+HOL+'/>'+
+ '<circle cx="66" cy="44" r="2" fill="#1b2233"/><circle cx="56" cy="44" r="2" fill="#1b2233"/><path d="M50 40 L58 42 M72 40 L64 42" stroke="#5a3a1c" stroke-width="2.6" stroke-linecap="round"/>'+
+ '<path d="M48 48 Q61 78 74 48 Q61 56 48 48Z" fill="#7a4a28" '+HOL+'/><path d="M54 50 Q61 54 68 50" stroke="#5a3a1c" stroke-width="3.4" fill="none" stroke-linecap="round"/>'+
+ '<g transform="'+hRot(p.arm,76,68)+'"><rect x="72" y="62" width="11" height="24" rx="5" fill="url(#gMain)" '+HOL+'/><circle cx="80" cy="88" r="6" fill="url(#gSkin)" '+HOL+'/>'+
+ '<rect x="82" y="26" width="6" height="78" rx="3" fill="#8b5a2b" '+HOL+'/><path d="M86 28 Q114 16 112 46 Q100 42 86 48Z" fill="url(#gSteel)" '+HOL+'/></g></g>';},
+
+spider:function(p){
+ const lg=function(a,b,c,d,e,f,col){const d0='M'+a+' '+b+' L'+c+' '+d+' L'+e+' '+f;return '<path d="'+d0+'" fill="none" stroke="#1b2233" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/><path d="'+d0+'" fill="none" stroke="'+col+'" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>';};
+ return ''+
+ '<g transform="'+hRot(-p.leg,60,88)+'">'+lg(44,84,24,50,16,120,'#5a4470')+lg(62,88,62,46,60,121,'#5a4470')+lg(78,84,98,50,104,120,'#5a4470')+'</g>'+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<ellipse cx="44" cy="82" rx="26" ry="22" fill="url(#gSpider)" '+HOL+'/><path d="M28 72 Q44 60 60 72 Q44 82 28 72Z" fill="url(#gMain)" stroke="#1b2233" stroke-width="2.2"/><circle cx="44" cy="90" r="4.5" fill="url(#gMain)" stroke="#1b2233" stroke-width="2"/>'+
+ '<ellipse cx="74" cy="82" rx="15" ry="13" fill="url(#gSpider)" '+HOL+'/>'+
+ '<g transform="translate('+(p.arm*0.2)+' 0)"><ellipse cx="92" cy="80" rx="12" ry="11" fill="url(#gSpider)" '+HOL+'/>'+
+ '<circle cx="96" cy="74" r="3.4" fill="#ff5252" stroke="#1b2233" stroke-width="1.5"/><circle cx="102" cy="78" r="2.8" fill="#ff5252" stroke="#1b2233" stroke-width="1.5"/><circle cx="91" cy="71" r="2.4" fill="#ff5252" stroke="#1b2233" stroke-width="1.2"/><circle cx="86" cy="75" r="2.4" fill="#ff5252" stroke="#1b2233" stroke-width="1.2"/>'+
+ '<path d="M97 88 L101 101 L104 88Z M89 89 L90 101 L95 89Z" fill="#f4f1e4" '+HOL+'/></g></g>'+
+ '<g transform="'+hRot(p.leg,60,88)+'">'+lg(34,86,12,56,6,118,'#9a78b8')+lg(52,90,36,48,30,121,'#9a78b8')+lg(70,90,84,48,92,121,'#9a78b8')+lg(84,86,106,56,114,118,'#9a78b8')+'</g>';},
+
+healer:function(p){return ''+
+ '<g transform="translate(0 '+p.body+')">'+
+ '<path d="M38 122 L44 62 Q60 54 76 62 L82 122 Q60 130 38 122Z" fill="url(#gHeal)" '+HOL+'/><path d="M38 117 Q60 125 82 117 L82 124 Q60 132 38 124Z" fill="url(#gMain)" '+HOL+'/>'+
+ '<path d="M48 66 Q60 82 72 66" stroke="#f4f1e4" stroke-width="4.5" fill="none" stroke-dasharray="3.5 3.5" stroke-linecap="round"/>'+
+ '<circle cx="42" cy="68" r="8" fill="url(#gHeal)" '+HOL+'/>'+
+ '<circle cx="60" cy="48" r="13" fill="#d9a07a" '+HOL+'/>'+
+ '<path d="M48 44 Q60 36 72 44 L72 54 Q60 60 48 54Z" fill="#c98f5a" '+HOL+'/><ellipse cx="54" cy="47" rx="3" ry="3.6" fill="#1b2233"/><ellipse cx="66" cy="47" rx="3" ry="3.6" fill="#1b2233"/><circle cx="55" cy="46" r="1" fill="#fff"/><circle cx="67" cy="46" r="1" fill="#fff"/><path d="M55 54 L65 54" stroke="#1b2233" stroke-width="2"/>'+
+ '<g transform="'+hRot(-42,60,34)+'"><ellipse cx="60" cy="14" rx="5.5" ry="15" fill="url(#gMain)" '+HOL+'/></g><g transform="'+hRot(-21,60,34)+'"><ellipse cx="60" cy="12" rx="5.5" ry="16" fill="#f4f1e4" '+HOL+'/></g><ellipse cx="60" cy="11" rx="5.5" ry="16" fill="url(#gMain)" '+HOL+'/>'+
+ '<g transform="'+hRot(21,60,34)+'"><ellipse cx="60" cy="12" rx="5.5" ry="16" fill="#f4f1e4" '+HOL+'/></g><g transform="'+hRot(42,60,34)+'"><ellipse cx="60" cy="14" rx="5.5" ry="15" fill="url(#gMain)" '+HOL+'/></g>'+
+ '<rect x="46" y="31" width="28" height="7" rx="3" fill="#8b5a2b" '+HOL+'/>'+
+ '<g transform="translate(0 '+p.ty+')"><path d="M92 36 L92 124" stroke="#1b2233" stroke-width="10" stroke-linecap="round"/><path d="M92 36 L92 124" stroke="#8b5a2b" stroke-width="5" stroke-linecap="round"/>'+
+ '<circle cx="92" cy="30" r="15" fill="#aaffc0" opacity=".25"/><circle cx="92" cy="30" r="9" fill="url(#gHealOrb)" stroke="#1b2233" stroke-width="2.5"/><path d="M86 46 L98 46 M86 52 L98 52" stroke="#f4f1e4" stroke-width="3" stroke-linecap="round"/>'+
+ '<rect x="76" y="82" width="22" height="10" rx="5" fill="url(#gHeal)" '+HOL+'/><circle cx="92" cy="88" r="5" fill="#d9a07a" stroke="#1b2233" stroke-width="2"/></g>'+
+ '<g transform="translate('+p.bx+' 0)" opacity="'+p.bo+'"><circle cx="96" cy="30" r="14" fill="#aaffc0" opacity=".3"/><circle cx="96" cy="30" r="8" fill="url(#gHealOrb)" stroke="#1b2233" stroke-width="2"/></g></g>';},
+
+cannon:function(p){return ''+
+ '<path d="M22 56 L22 100" stroke="#1b2233" stroke-width="7" stroke-linecap="round"/><path d="M22 56 L22 100" stroke="#8b5a2b" stroke-width="3" stroke-linecap="round"/><path d="M24 54 L44 60 L24 68Z" fill="url(#gMain)" '+HOL+'/>'+
+ '<rect x="20" y="98" width="82" height="22" rx="8" fill="url(#gStone)" '+HOL+'/><rect x="20" y="106" width="82" height="6" fill="url(#gMain)" stroke="#1b2233" stroke-width="2"/>'+
+ '<g transform="translate('+(p.pull*0.6)+' 0)"><g transform="rotate(-9 60 82)"><path d="M28 70 L98 62 L102 82 L32 94Z" fill="url(#gDark)" '+HOL+'/><path d="M42 70 L44 92 M62 67 L64 89 M82 64 L84 86" stroke="#11151f" stroke-width="3"/><path d="M30 72 L96 64" stroke="#8a95aa" stroke-width="2" opacity=".6"/><ellipse cx="100" cy="72" rx="6" ry="11" fill="#11151f" '+HOL+'/><circle cx="28" cy="82" r="10" fill="url(#gDark)" '+HOL+'/></g></g>'+
+ '<circle cx="46" cy="96" r="15" fill="#8b5a2b" '+HOL+'/><circle cx="46" cy="96" r="5" fill="#5a3a1c" stroke="#1b2233" stroke-width="2"/><path d="M46 82 L46 110 M32 96 L60 96 M36 86 L56 106 M56 86 L36 106" stroke="#5a3a1c" stroke-width="2.5"/>'+
+ '<g opacity="'+p.bo+'"><path d="M104 66 L118 58 L114 70 L128 72 L114 78 L118 90 L104 80Z" fill="#ffd54f" stroke="#ff8f00" stroke-width="1.8" stroke-linejoin="round"/></g>';},
+
+mortar:function(p){return ''+
+ '<rect x="24" y="100" width="72" height="20" rx="7" fill="url(#gStone)" '+HOL+'/><rect x="24" y="108" width="72" height="6" fill="url(#gMain)" stroke="#1b2233" stroke-width="2"/>'+
+ '<rect x="36" y="88" width="48" height="16" rx="5" fill="url(#gDark)" '+HOL+'/>'+
+ '<g transform="translate(0 '+(-p.pull*0.4)+')"><g transform="rotate(22 60 98)"><path d="M44 98 L48 38 L78 38 L82 98Z" fill="url(#gDark)" '+HOL+'/><rect x="45" y="58" width="36" height="6" fill="#11151f"/><rect x="44" y="78" width="38" height="6" fill="#11151f"/><ellipse cx="63" cy="38" rx="15" ry="6" fill="#11151f" '+HOL+'/><path d="M50 44 L50 94" stroke="#8a95aa" stroke-width="2.5" opacity=".5"/></g></g>'+
+ '<g opacity="'+p.bo+'"><circle cx="86" cy="30" r="10" fill="#d8dde6" stroke="#1b2233" stroke-width="2"/><circle cx="98" cy="22" r="8" fill="#eef1f6" stroke="#1b2233" stroke-width="2"/><circle cx="92" cy="12" r="6" fill="#f7f9fc" stroke="#1b2233" stroke-width="2"/></g>'+
+ '<g opacity="'+(p.ao<1?1:0)+'"><circle cx="100" cy="6" r="6" fill="#2b2f3a" '+HOL+'/></g>';},
+
+siege:function(p){return ''+
+ '<rect x="20" y="74" width="80" height="16" rx="5" fill="#8b5a2b" '+HOL+'/><path d="M24 80 L96 80" stroke="#5a3a1c" stroke-width="2.5"/>'+
+ '<path d="M32 74 L42 52 L56 52 L52 74Z" fill="url(#gMain)" '+HOL+'/>'+
+ '<path d="M96 38 Q124 70 96 102" fill="none" stroke="#1b2233" stroke-width="11" stroke-linecap="round"/><path d="M96 38 Q124 70 96 102" fill="none" stroke="#8b5a2b" stroke-width="6" stroke-linecap="round"/>'+
+ '<path d="M96 38 L'+(78+p.pull)+' 70 L96 102" fill="none" stroke="#e8eef9" stroke-width="2"/>'+
+ '<g transform="translate('+p.ax+' 0)" opacity="'+p.ao+'"><path d="M34 70 L116 70" stroke="#1b2233" stroke-width="7" stroke-linecap="round"/><path d="M34 70 L116 70" stroke="#c9a46a" stroke-width="3.5" stroke-linecap="round"/><path d="M112 62 L126 70 L112 78Z" fill="url(#gSteel)" '+HOL+'/><path d="M34 70 L28 63 M34 70 L28 77" stroke="url(#gMain)" stroke-width="5" stroke-linecap="round"/></g>'+
+ '<circle cx="34" cy="76" r="5" fill="#6c7890" '+HOL+'/>'+
+ '<g transform="'+hRot(p.leg*3,36,102)+'"><circle cx="36" cy="102" r="17" fill="#8b5a2b" '+HOL+'/><circle cx="36" cy="102" r="5" fill="#5a3a1c" stroke="#1b2233" stroke-width="2"/><path d="M36 86 L36 118 M20 102 L52 102 M24 90 L48 114 M48 90 L24 114" stroke="#5a3a1c" stroke-width="2.5"/></g>'+
+ '<g transform="'+hRot(p.leg*3,82,102)+'"><circle cx="82" cy="102" r="17" fill="#8b5a2b" '+HOL+'/><circle cx="82" cy="102" r="5" fill="#5a3a1c" stroke="#1b2233" stroke-width="2"/><path d="M82 86 L82 118 M66 102 L98 102 M70 90 L94 114 M94 90 L70 114" stroke="#5a3a1c" stroke-width="2.5"/></g>';},
+
+mine:function(p){return ''+
+ '<ellipse cx="60" cy="112" rx="36" ry="13" fill="#1f232e" '+HOL+'/><ellipse cx="60" cy="112" rx="30" ry="9.5" fill="none" stroke="url(#gMain)" stroke-width="4"/>'+
+ '<path d="M32 106 L26 96 L38 100Z M46 100 L44 88 L54 96Z M66 98 L72 86 L78 98Z M82 102 L92 94 L88 108Z" fill="url(#gSteel)" '+HOL+'/>'+
+ '<ellipse cx="60" cy="106" rx="22" ry="9" fill="url(#gDark)" '+HOL+'/><ellipse cx="56" cy="103" rx="9" ry="3" fill="#fff" opacity=".18"/>'+
+ '<circle cx="60" cy="106" r="5" fill="#ff5252" stroke="#1b2233" stroke-width="2"/><circle cx="60" cy="106" r="10" fill="#ff5252" opacity="'+(p.arm?0.5:0.22)+'"/>';}
+};
+function heroPose(key,vid){return Object.assign({leg:0,arm:0,body:0,pull:0,ax:0,ao:1,ty:0,bx:0,bo:0,v:vid||''},HERO_POSES[key]||{});}
+// Варианты: тот же рисунок, другая палитра. ov: подмена цветов градиента (по порядку остановок).
+const HERO_VAR={
+ fireDragon:{base:'dragon',ov:{gDragon:['#ffb36b','#e8531f','#8a1d0c']},size:3.7},
+ fireDemon:{base:'dragon',ov:{gDragon:['#d8625a','#7a1426','#2a0610']},size:3.4},
+ edragon:{base:'dragon',ov:{gDragon:['#b8f4ff','#2fb4e8','#16608a']},size:3.5},
+ royalGhost:{base:'ghost',ov:{gGhost:['#fff6d6','#e8c75a','#a07a18']},size:3.0},
+ bloodKnight:{base:'knight',ov:{gSteel:['#ffb8b8','#b03030','#4a1010']},size:3.0},
+ witchQueen:{base:'witch',ov:{gWitch:['#e8c96a','#7a3a9a','#220a38']},size:3.1},
+ golemite:{base:'golem',ov:{gStone:['#cdb79f','#94795f','#5a4636']},size:3.0},
+ iceShaman:{base:'healer',ov:{gHeal:['#f0fbff','#7cc8f0','#2a6ea8'],gHealOrb:['#fff','#bfeaff','#3a9ae0']},size:3.0},
+ engineerTurret:{base:'cannon',ov:{gDark:['#cfd8dc','#90a4ae','#546e7a']},size:2.9},
+ legendKnight:{base:'knight',ov:{gSteel:['#fff3bf','#f2c94c','#a67c00']},size:3.3}
+};
+function heroBase(vid){const V=HERO_VAR[vid];return V?V.base:vid;}
+function heroHas(vid){return !!HERO_ART[heroBase(vid)];}
+function heroSizeOf(vid){const V=HERO_VAR[vid];return (V&&V.size)||HERO_SIZE[heroBase(vid)]||2.9;}
+function heroDefsFor(team,vid){
+ let d=heroDefs(team);const V=HERO_VAR[vid];
+ if(V&&V.ov)Object.keys(V.ov).forEach(function(id){
+  const cols=V.ov[id];let i=0;
+  d=d.replace(new RegExp('(<(?:linear|radial)Gradient id="'+id+'"[^>]*>)([\\s\\S]*?)(</(?:linear|radial)Gradient>)'),function(m,a,b,c){return a+b.replace(/stop-color="[^"]*"/g,function(){return 'stop-color="'+(cols[Math.min(i++,cols.length-1)])+'"';})+c;});
+ });
+ return d;
+}
+function heroSvg(vid,team,key,w,h){return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -8 144 150" width="'+(w||HERO_W)+'" height="'+(h||HERO_H)+'">'+heroDefsFor(team,vid)+HERO_ART[heroBase(vid)](heroPose(key,vid))+'</svg>';}
+// Кадры: вектор -> картинка -> битмап в canvas (рисуется быстро, без повторной растеризации).
+const heroFrames={};
+function heroFrame(vid,team,key){
+ const k=vid+'|'+team+'|'+key;let f=heroFrames[k];
+ if(!f){
+  f=heroFrames[k]={img:new Image(),cv:null};
+  f.img.onload=function(){try{const cv=document.createElement('canvas');cv.width=HERO_W;cv.height=HERO_H;cv.getContext('2d').drawImage(f.img,0,0,HERO_W,HERO_H);f.cv=cv;}catch(e){}};
+  f.img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(heroSvg(vid,team,key));
+ }
+ return f.cv;
+}
+// На старте готовим только кадр покоя каждого героя; остальные кадры создаются при первом появлении.
+function heroWarmup(){
+ const ids=Object.keys(HERO_ART).concat(Object.keys(HERO_VAR));
+ const jobs=[];ids.forEach(function(v){[0,1].forEach(function(t){jobs.push([v,t]);});});
+ (function step(){const n=jobs.splice(0,6);n.forEach(function(j){heroFrame(j[0],j[1],'i');});if(jobs.length)setTimeout(step,30);})();
+}
+function drawHeroSprite(u,px,py,r){
+ const shape=u.cfg&&u.cfg.shape;
+ if(!shape||(u.isMine&&u.team===1&&u.mineArmed))return false;
+ const vid=HERO_VAR[u.cfg.id]?u.cfg.id:shape;
+ if(!heroHas(vid))return false;
+ const team=u.team===0?0:1,now=performance.now();
+ if(u._hx===undefined){u._hx=u.x;u._hy=u.y;u._hmv=0;}
+ if(Math.abs(u.x-u._hx)+Math.abs(u.y-u._hy)>0.05)u._hmv=now;
+ u._hx=u.x;u._hy=u.y;
+ let key='i';
+ if(u.swing>0)key='a'+Math.min(2,Math.floor((1-u.swing/0.2)*3));
+ else if(u.flying)key='w'+(Math.floor(now/110)%4);
+ else if(now-u._hmv<180)key='w'+((Math.floor(u.bob/1.3)%4)+4)%4;
+ const img=heroFrame(vid,team,key)||heroFrame(vid,team,'i');
+ if(!img)return false;
+ const k=heroSizeOf(vid)*r/110;
+ ctx.save();ctx.translate(px,py+r*0.95);ctx.scale(u.facing<0?-1:1,1);
+ ctx.drawImage(img,-72*k,-130*k,144*k,150*k);
+ ctx.restore();return true;
+}
+// Иконка карты: героя показываем картинкой, остальные карты остаются эмодзи.
+function cardIconHtml(c){
+ if(!c)return '';
+ const vid=HERO_VAR[c.id]?c.id:c.shape;
+ if(vid&&heroHas(vid)){
+  if(!c._heroIcon)c._heroIcon='<img class="heroIcon" alt="" draggable="false" src="data:image/svg+xml;charset=utf-8,'+encodeURIComponent(heroSvg(vid,0,'i',96,134).replace('viewBox="-12 -8 144 150"','viewBox="14 0 96 134"'))+'">';
+  return c._heroIcon;
+ }
+ return c.icon;
+}
+
+/* ==================== ЭТАП 52: ВЕКТОРНЫЕ БАШНИ И ЗАКЛИНАНИЯ ==================== */
+// Рисунки готовятся один раз и кэшируются. Пока картинка не готова, игра использует старую отрисовку.
+const gfxCache={};
+function gfxGet(key,svgFn,w,h){
+ let f=gfxCache[key];
+ if(!f){
+  f=gfxCache[key]={cv:null};
+  const img=new Image();
+  img.onload=function(){try{const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);f.cv=cv;}catch(e){}};
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svgFn());
+ }
+ return f.cv;
+}
+const GOL='stroke="#1b2233" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"';
+function towerSvg(sk,team,king,active){
+ const P=team===0?sk.blue:sk.red,st=sk.style,tr=sk.trim;
+ let s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 160" width="240" height="320"><defs>'+
+  '<linearGradient id="tb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="'+P.light+'"/><stop offset=".25" stop-color="'+P.main+'"/><stop offset="1" stop-color="'+P.dark+'"/></linearGradient>'+
+  '<linearGradient id="tp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+P.light+'"/><stop offset="1" stop-color="'+P.main+'"/></linearGradient>'+
+  (st==='neon'?'<filter id="gl" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>':'')+'</defs>';
+ s+='<path d="M10 150 L10 122 Q10 112 20 112 L100 112 Q110 112 110 122 L110 150Z" fill="'+P.dark+'" '+GOL+'/>';
+ s+='<path d="M20 126 L40 126 M60 126 L80 126 M30 138 L50 138 M70 138 L90 138" stroke="#000" stroke-width="2" opacity=".25"/>';
+ s+='<path d="M22 118 L22 54 Q22 46 30 46 L90 46 Q98 46 98 54 L98 118Z" fill="url(#tb)" '+GOL+'/>';
+ let br='';for(let y=62;y<118;y+=14)br+='M24 '+y+' L96 '+y+' ';
+ for(let r2=0;r2<4;r2++){const y=54+r2*14;for(let x=(r2%2?36:28);x<96;x+=24)br+='M'+x+' '+y+' L'+x+' '+(y+14)+' ';}
+ s+='<path d="'+br+'" stroke="#000" stroke-width="1.6" opacity=".2" fill="none"/><rect x="27" y="52" width="10" height="60" rx="5" fill="#fff" opacity=".16"/>';
+ if(st==='candy'){for(let x=30;x<=90;x+=16)s+='<rect x="'+x+'" y="50" width="7" height="62" fill="#fff0f6" opacity=".85"/>';}
+ if(st==='royal'){for(let x=30;x<=90;x+=12)s+='<circle cx="'+x+'" cy="108" r="2.4" fill="#ffe082"/>';s+='<path d="M22 100 L98 100" stroke="'+tr+'" stroke-width="3"/>';}
+ if(st==='ice'){s+='<path d="M26 80 L50 80 M70 100 L94 100 M30 96 L44 96" stroke="#fff" stroke-width="2.4" opacity=".65" stroke-linecap="round"/>';}
+ if(st==='neon'){s+='<g filter="url(#gl)"><path d="M24 104 L96 104 M24 60 L96 60" stroke="'+tr+'" stroke-width="2.4"/><path d="M22 118 L22 54 Q22 46 30 46 L90 46 Q98 46 98 54 L98 118" fill="none" stroke="'+tr+'" stroke-width="1.8"/></g>';}
+ s+='<rect x="14" y="34" width="92" height="18" rx="5" fill="url(#tp)" '+GOL+'/>';
+ [16,51,86].forEach(function(x){s+='<rect x="'+x+'" y="20" width="18" height="18" rx="3" fill="'+P.light+'" '+GOL+'/>';});
+ if(st==='royal')s+='<path d="M14 43 L106 43" stroke="'+tr+'" stroke-width="3"/>';
+ if(st==='ice'){for(let x=22;x<=94;x+=12)s+='<path d="M'+x+' 52 L'+(x+7)+' 52 L'+(x+3.5)+' 63Z" fill="#e8fbff" stroke="#1b2233" stroke-width="2" stroke-linejoin="round"/>';}
+ const win=st==='shadow'?'#ff4d4d':'#161a26';
+ s+='<rect x="34" y="66" width="6" height="16" rx="3" fill="'+win+'"/><rect x="80" y="66" width="6" height="16" rx="3" fill="'+win+'"/>';
+ s+='<path d="M50 72 L70 72 L70 88 Q60 98 50 88Z" fill="'+P.light+'" stroke="'+tr+'" stroke-width="2.4" stroke-linejoin="round"/>';
+ s+='<path d="M46 150 L46 122 Q60 100 74 122 L74 150Z" fill="#161a26" '+GOL+'/><path d="M46 150 L46 122 Q60 100 74 122 L74 150" fill="none" stroke="'+(king?'#ffd54f':tr)+'" stroke-width="3.5"/>';
+ if(st==='shadow')s+='<circle cx="60" cy="130" r="4" fill="#ff4d4d"/>';
+ if(king){
+  s+='<path d="M38 28 L42 6 L51 18 L60 2 L69 18 L78 6 L82 28Z" fill="'+(active?sk.crown:sk.dullCrown)+'" stroke="'+tr+'" stroke-width="3" stroke-linejoin="round"/><circle cx="60" cy="12" r="2.6" fill="#e53935"/>';
+ }else{
+  s+='<path d="M60 20 L60 2" stroke="#1b2233" stroke-width="4" stroke-linecap="round"/><path d="M60 3 L84 9 L60 17Z" fill="'+P.light+'" '+GOL+'/>';
+ }
+ return s+'</svg>';
+}
+function towerSprite(sk,team,king,active){return gfxGet('T|'+sk.id+'|'+team+'|'+(king?1:0)+'|'+(active?1:0),function(){return towerSvg(sk,team,king,active);},240,320);}
+
+// ---- Заклинания: рисунки полёта и попадания (viewBox 200x200) ----
+function spArrow(x,y,rot,len){return '<g transform="translate('+x+' '+y+') rotate('+rot+')"><path d="M0 -'+len+' L0 26" stroke="#1b2233" stroke-width="7" stroke-linecap="round"/><path d="M0 -'+len+' L0 26" stroke="#c9a46a" stroke-width="3.4" stroke-linecap="round"/><path d="M-8 24 L0 40 L8 24Z" fill="#cfd8e8" stroke="#1b2233" stroke-width="3" stroke-linejoin="round"/><path d="M0 -'+len+' L-7 -'+(len+9)+' M0 -'+len+' L7 -'+(len+9)+' M0 -'+(len-9)+' L-7 -'+(len)+' M0 -'+(len-9)+' L7 -'+(len)+'" stroke="#f1f4fa" stroke-width="4" stroke-linecap="round"/></g>';}
+function spStar(n,R,r,cx,cy){let p='';for(let i=0;i<n*2;i++){const a=Math.PI*i/n,rad=i%2?r:R;p+=(i?'L':'M')+(cx+Math.sin(a)*rad).toFixed(1)+' '+(cy-Math.cos(a)*rad).toFixed(1);}return p+'Z';}
+function spRand(seed){let s=seed;return function(){s=(s*1664525+1013904223)%4294967296;return s/4294967296;};}
+const SPELL_SVG={
+ fireball:function(){return '<circle cx="100" cy="124" r="62" fill="#ff7a00" opacity=".22"/><path d="M100 10 Q134 66 150 112 Q152 172 100 186 Q48 172 50 112 Q66 66 100 10Z" fill="#ff7a00" stroke="#1b2233" stroke-width="7" stroke-linejoin="round"/><path d="M100 54 Q124 96 130 126 Q130 162 100 170 Q70 162 70 126 Q76 96 100 54Z" fill="#ffb300"/><ellipse cx="100" cy="142" rx="20" ry="24" fill="#fff7c2"/><circle cx="66" cy="70" r="5" fill="#ffd54f"/><circle cx="138" cy="84" r="4" fill="#ffd54f"/><circle cx="82" cy="40" r="3.5" fill="#fff59d"/>';},
+ arrows:function(){let s='';[[60,70,-6],[100,52,4],[142,70,8],[40,118,5],[80,112,-4],[120,112,6],[160,118,-8],[66,160,3],[132,162,-5]].forEach(function(a){s+=spArrow(a[0],a[1],a[2],30);});return s;},
+ goblinBarrel:function(){return '<path d="M52 74 Q100 58 148 74 L156 156 Q100 176 44 156Z" fill="#b07a3f" stroke="#1b2233" stroke-width="5" stroke-linejoin="round"/><path d="M74 66 L70 168 M100 62 L100 172 M126 66 L130 168" stroke="#7a4e22" stroke-width="3" opacity=".55"/><path d="M47 102 Q100 118 153 102 M44 136 Q100 154 156 136" fill="none" stroke="#3b2f24" stroke-width="10" stroke-linecap="round"/><ellipse cx="100" cy="74" rx="49" ry="14" fill="#2a1e14" stroke="#1b2233" stroke-width="4"/><path d="M76 62 L56 40 L84 52Z M124 62 L144 40 L116 52Z" fill="#8fdc5a" stroke="#1b2233" stroke-width="3.5" stroke-linejoin="round"/><circle cx="100" cy="58" r="26" fill="#8fdc5a" stroke="#1b2233" stroke-width="4"/><ellipse cx="90" cy="54" rx="6" ry="7" fill="#fff8c4" stroke="#1b2233" stroke-width="2.5"/><ellipse cx="110" cy="54" rx="6" ry="7" fill="#fff8c4" stroke="#1b2233" stroke-width="2.5"/><circle cx="91" cy="55" r="2.6" fill="#1b2233"/><circle cx="111" cy="55" r="2.6" fill="#1b2233"/><path d="M90 68 Q100 78 110 68Z" fill="#3a1d1d" stroke="#1b2233" stroke-width="2.5" stroke-linejoin="round"/><circle cx="72" cy="76" r="8" fill="#6fcb3f" stroke="#1b2233" stroke-width="3"/><circle cx="128" cy="76" r="8" fill="#6fcb3f" stroke="#1b2233" stroke-width="3"/>';},
+ freeze:function(){let s='<circle cx="100" cy="100" r="74" fill="#bfeaff" opacity=".22"/>';for(let i=0;i<6;i++){s+='<g transform="rotate('+(i*60)+' 100 100)"><path d="M100 100 L100 26" stroke="#1b2233" stroke-width="14" stroke-linecap="round"/><path d="M100 100 L100 26" stroke="#bfeaff" stroke-width="8" stroke-linecap="round"/><path d="M100 54 L84 36 M100 54 L116 36" stroke="#1b2233" stroke-width="12" stroke-linecap="round"/><path d="M100 54 L84 36 M100 54 L116 36" stroke="#e8fbff" stroke-width="6" stroke-linecap="round"/></g>';}return s+'<circle cx="100" cy="100" r="17" fill="#e8fbff" stroke="#1b2233" stroke-width="5"/><circle cx="95" cy="95" r="5" fill="#fff"/>';},
+ lightning:function(){return '<circle cx="100" cy="100" r="76" fill="#fff59d" opacity=".25"/><path d="M118 8 L56 108 L94 108 L78 192 L150 84 L110 84Z" fill="#fff176" stroke="#1b2233" stroke-width="7" stroke-linejoin="round"/><path d="M112 34 L80 96 L104 96 L94 150" fill="none" stroke="#fffde7" stroke-width="6" stroke-linecap="round"/>';},
+ shield:function(){return '<circle cx="100" cy="100" r="78" fill="#90a4ae" opacity=".22" stroke="#cfd8dc" stroke-width="8"/><path d="M54 70 A58 58 0 0 1 100 42" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" opacity=".7"/><path d="M100 54 L140 68 L136 112 Q130 140 100 156 Q70 140 64 112 L60 68Z" fill="#aab6ca" stroke="#1b2233" stroke-width="6" stroke-linejoin="round"/><path d="M100 70 L100 142 M72 96 L128 96" stroke="#ffd54f" stroke-width="9" stroke-linecap="round"/>';},
+ fx_explosion:function(){let s='<circle cx="100" cy="100" r="92" fill="#ff7a00" opacity=".18"/>';const R=spRand(7);for(let i=0;i<9;i++){const a=i/9*Math.PI*2;s+='<circle cx="'+(100+Math.cos(a)*76).toFixed(1)+'" cy="'+(100+Math.sin(a)*76).toFixed(1)+'" r="'+(12+R()*8).toFixed(1)+'" fill="#4a4f5a" opacity=".7"/>';}
+  return s+'<path d="'+spStar(14,92,58,100,100)+'" fill="#ff7a00" stroke="#1b2233" stroke-width="6" stroke-linejoin="round"/><path d="'+spStar(14,68,38,100,100)+'" fill="#ffb300"/><circle cx="100" cy="100" r="30" fill="#fff7c2"/>';},
+ fx_ice:function(){let s='<circle cx="100" cy="100" r="86" fill="#bfeaff" opacity=".2" stroke="#bfeaff" stroke-width="5"/>';for(let i=0;i<8;i++){s+='<g transform="rotate('+(i*45)+' 100 100)"><path d="M100 100 L90 30 L100 6 L110 30Z" fill="#cfeeff" stroke="#1b2233" stroke-width="4" stroke-linejoin="round"/></g><g transform="rotate('+(i*45+22)+' 100 100)"><path d="M100 100 L94 52 L100 36 L106 52Z" fill="#e8fbff" stroke="#1b2233" stroke-width="3" stroke-linejoin="round"/></g>';}return s+'<circle cx="100" cy="100" r="18" fill="#fff" stroke="#1b2233" stroke-width="4"/>';},
+ fx_arrows:function(){const R=spRand(11);let s='<circle cx="100" cy="100" r="86" fill="#8bc34a" opacity=".12"/>';for(let i=0;i<15;i++){const a=R()*Math.PI*2,d=Math.sqrt(R())*58;s+=spArrow((100+Math.cos(a)*d).toFixed(1),(100+Math.sin(a)*d).toFixed(1),(R()*40-20).toFixed(1),20);}return s;},
+ fx_barrel:function(){const R=spRand(5);let s='';for(let i=0;i<9;i++){const a=i/9*Math.PI*2,d=34+R()*34;s+='<circle cx="'+(100+Math.cos(a)*d).toFixed(1)+'" cy="'+(100+Math.sin(a)*d).toFixed(1)+'" r="'+(10+R()*8).toFixed(1)+'" fill="#d9c7a0" opacity=".55"/>';}
+  for(let i=0;i<7;i++){const a=i/7*Math.PI*2+0.3,d=40+R()*36;s+='<g transform="translate('+(100+Math.cos(a)*d).toFixed(1)+' '+(100+Math.sin(a)*d).toFixed(1)+') rotate('+(R()*180).toFixed(0)+')"><rect x="-20" y="-7" width="40" height="14" rx="3" fill="#b07a3f" stroke="#1b2233" stroke-width="3"/></g>';}
+  return s+'<path d="M70 96 Q100 84 130 96" fill="none" stroke="#3b2f24" stroke-width="9" stroke-linecap="round" stroke-dasharray="26 14"/>';},
+ fx_shield:function(){return '<circle cx="100" cy="100" r="88" fill="#cfd8dc" opacity=".2" stroke="#cfd8dc" stroke-width="8"/><circle cx="100" cy="100" r="66" fill="none" stroke="#fff" stroke-width="3" opacity=".6"/><path d="M42 74 A64 64 0 0 1 84 38" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" opacity=".75"/><path d="'+spStar(4,16,4,40,150)+'" fill="#fff"/><path d="'+spStar(4,12,3,160,60)+'" fill="#fff"/><path d="'+spStar(4,14,3.5,150,150)+'" fill="#ffd54f"/>';}
+};
+function spellSprite(key){
+ if(!SPELL_SVG[key])return null;
+ return gfxGet('S|'+key,function(){return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="160" height="160">'+SPELL_SVG[key]()+'</svg>';},160,160);
+}
+function spellKeyOf(p){return p.freeze?'freeze':(p.spawnId?'goblinBarrel':p.spellId);}
+// Полёт заклинания. Возвращает false, если рисунок ещё не готов (тогда работает старая отрисовка).
+function drawSpellFlight(p,x,y,t){
+ const key=spellKeyOf(p),spr=spellSprite(key);
+ if(!spr)return false;
+ let s=60,rot=0,al=1;
+ if(key==='fireball'){s=64;}
+ else if(key==='arrows'){s=Math.max(90,(p.splash||95)*2.1);al=0.95;}
+ else if(key==='goblinBarrel'){s=58;rot=t*12;}
+ else if(key==='freeze'){s=62;rot=t*4;}
+ else if(key==='lightning'){s=66;al=0.7+0.3*Math.sin(t*40);}
+ else if(key==='shield'){s=60;}
+ ctx.save();ctx.globalAlpha=al;ctx.translate(x,y);ctx.rotate(rot);ctx.drawImage(spr,-s/2,-s/2,s,s);ctx.restore();
+ return true;
+}
+let spellFx=[];
+function spellImpactFx(p){
+ const key=spellKeyOf(p);
+ const map={fireball:['fx_explosion',0.55,1.15],arrows:['fx_arrows',1.1,1.05],goblinBarrel:['fx_barrel',0.7,1.0],freeze:['fx_ice',0.85,1.05],shield:['fx_shield',0.9,1.0]};
+ const m=map[key];if(!m)return;
+ spellFx.push({type:m[0],x:p.tx,y:p.ty,life:m[1],max:m[1],r:(p.splash||60)*m[2]});
+}
+function drawSpellFx(){
+ for(const f of spellFx){
+  const spr=spellSprite(f.type);if(!spr)continue;
+  const k=f.life/f.max;
+  let grow=f.type==='fx_explosion'?(1.1-0.4*k):(f.type==='fx_ice'?(1.05-0.12*k):1);
+  const s=f.r*2*grow;
+  ctx.save();ctx.globalAlpha=Math.min(1,k*1.7);ctx.drawImage(spr,f.x-s/2,f.y-s/2,s,s);ctx.restore();
+ }
+}
+function warmGfx(){
+ Object.keys(SPELL_SVG).forEach(function(k){spellSprite(k);});
+ const sk=TOWER_SKINS.find(function(x){return x.id===progression.towerSkin;})||TOWER_SKINS[0];[0,1].forEach(function(t){towerSprite(sk,t,false,true);towerSprite(sk,t,true,true);towerSprite(sk,t,true,false);});
+}
+
 const UNIT_DRAW_SCALE=1.2;
 function drawUnits(){
  const sorted=units.slice().filter(u=>!u.dead||(u.isBuilding&&u.dyingTimer>0)).sort((a,b)=>(a.y+(a.z||0))-(b.y+(b.z||0)));
@@ -4062,7 +4951,7 @@ function drawUnit(u){
  if(u.cfg.id==='musketeer'&&u.aimTime>=0.5){ctx.save();ctx.globalAlpha=0.4;ctx.strokeStyle='#ce93d8';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px,py,r*1.35,0,7);ctx.stroke();ctx.restore();}
  if(u._berserkActive){ctx.save();ctx.globalAlpha=0.4+Math.sin(performance.now()*0.008)*0.2;ctx.fillStyle='#ff5722';ctx.beginPath();ctx.arc(px,py,r*1.6,0,7);ctx.fill();ctx.restore();}
  if(u.statuses&&u.statuses.stone&&!u.isMine){ctx.save();ctx.globalAlpha=0.5;ctx.strokeStyle='#90a4ae';ctx.lineWidth=3;ctx.beginPath();ctx.arc(px,py,r*1.3,0,7);ctx.stroke();ctx.restore();}
- drawShape(c.shape,px,py,r,u.facing,c.color,tc,u);
+ if(!drawHeroSprite(u,px,py,r))drawShape(c.shape,px,py,r,u.facing,c.color,tc,u);
  if(u.frozen>0){ctx.save();ctx.globalAlpha=0.6;ctx.fillStyle='rgba(179,229,252,0.9)';ctx.beginPath();ctx.arc(px,py,r*1.15,0,7);ctx.fill();ctx.strokeStyle='#81d4fa';ctx.lineWidth=2;ctx.stroke();ctx.restore();}
  if(u.flash>0){ctx.globalAlpha=u.flash*5;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(px,py,r*1.05,0,7);ctx.fill();ctx.globalAlpha=stealthAlpha;}
  if(u.hp<u.maxHp&&!u.isMine)drawHpBar(u.x,u.y-r-14-z,r*2.4,u.hp/u.maxHp,u.team,false,0);
@@ -4125,7 +5014,8 @@ function drawProjectiles(){
  let col='#ff9800';
  if(p.freeze)col='#81d4fa';else if(p.spawnId)col='#a1887f';else if(p.spellId==='arrows')col='#8bc34a';else if(p.spellId==='lightning')col='#fff59d';else if(p.spellId==='shield')col='#90a4ae';
  ctx.save();ctx.globalAlpha=0.5;ctx.strokeStyle=col;ctx.lineWidth=3;ctx.beginPath();ctx.arc(p.tx,p.ty,p.splash,0,7);ctx.stroke();ctx.globalAlpha=0.22;ctx.fillStyle=col;ctx.fill();ctx.restore();
- if(p.spellId==='lightning'){ctx.save();ctx.translate(x,y);ctx.globalAlpha=0.9;ctx.strokeStyle='#fff59d';ctx.lineWidth=3;for(let i=0;i<5;i++){const a=i*1.3+t*6;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*22,Math.sin(a)*22);ctx.stroke();}ctx.restore();}
+ if(drawSpellFlight(p,x,y,t)){}
+  else if(p.spellId==='lightning'){ctx.save();ctx.translate(x,y);ctx.globalAlpha=0.9;ctx.strokeStyle='#fff59d';ctx.lineWidth=3;for(let i=0;i<5;i++){const a=i*1.3+t*6;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*22,Math.sin(a)*22);ctx.stroke();}ctx.restore();}
  else if(p.spellId==='shield'){ctx.save();ctx.translate(x,y);ctx.globalAlpha=0.7;ctx.strokeStyle='#90a4ae';ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,18,0,7);ctx.stroke();ctx.strokeStyle='#cfd8dc';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,12,0,7);ctx.stroke();ctx.restore();}
  else if(p.spawnId){ctx.save();ctx.translate(x,y);ctx.rotate(t*12);ctx.fillStyle='#8d6e63';rrect(-14,-10,28,20,4);ctx.fill();ctx.strokeStyle='#5d4037';ctx.lineWidth=2;ctx.stroke();ctx.restore();}
  else if(p.freeze){ctx.save();ctx.translate(x,y);ctx.strokeStyle='#b3e5fc';ctx.lineWidth=3;for(let i=0;i<6;i++){const a=i*Math.PI/3+t*4;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*18,Math.sin(a)*18);ctx.stroke();}ctx.restore();}
@@ -4205,7 +5095,7 @@ function renderEnemyHand(){
  el.style.display='';
  if(!players||!players[1])return;
  if(onlineMode||replayState==='playing'){el.innerHTML='<div style="font-size:11px;color:#4dd0e1;font-weight:800;">'+(replayState==='playing'?'▶':'🌐')+'</div>';return;}
- for(const id of players[1].hand){const c=CARDS[id];if(!c)continue;const d=document.createElement('div');d.className='eh-card';d.innerHTML=c.icon+'<div class="eh-cost">'+c.cost+'</div>';el.appendChild(d);}
+ for(const id of players[1].hand){const c=CARDS[id];if(!c)continue;const d=document.createElement('div');d.className='eh-card';d.innerHTML=cardIconHtml(c)+'<div class="eh-cost">'+c.cost+'</div>';el.appendChild(d);}
 }
 function renderHand(){
  const el=document.getElementById('hand');el.innerHTML='';cardEls=[];
@@ -4216,7 +5106,7 @@ function renderHand(){
  const d=document.createElement('div');d.className='card'+(evolved?' evolved':'');d.title=cardInfoText(id);
  let html='';
  if(evolved)html+='<div class="cevo">✨</div>';
- html+='<div class="clvl">'+lv+'</div><div class="cicon">'+c.icon+'</div><div class="cname">'+c.name+'</div><div class="ccost">'+c.cost+'</div><div class="card-charge-fill" aria-hidden="true"></div><div class="card-charge-ratio" aria-hidden="true">0/'+c.cost+'</div>';
+ html+='<div class="clvl">'+lv+'</div><div class="cicon">'+cardIconHtml(c)+'</div><div class="cname">'+c.name+'</div><div class="ccost">'+c.cost+'</div><div class="card-charge-fill" aria-hidden="true"></div><div class="card-charge-ratio" aria-hidden="true">0/'+c.cost+'</div>';
  d.innerHTML=html;
  d.addEventListener('pointerdown',function(ev){
  ev.stopPropagation();
@@ -4250,7 +5140,7 @@ function renderHand(){
 function renderNextCard(){
  const el=document.getElementById('nextCard');if(!el||!players)return;
  const id=players[0].pile&&players[0].pile[0],c=id&&CARDS[id];
- el.innerHTML=c?'<div class="ncIcon">'+c.icon+'</div><div class="ncCost">'+c.cost+'</div>':'';el.title=c?('Следующая: '+c.name):'';
+ el.innerHTML=c?'<div class="ncIcon">'+cardIconHtml(c)+'</div><div class="ncCost">'+c.cost+'</div>':'';el.title=c?('Следующая: '+c.name):'';
 }
 let dragState=null;
 const DRAG_TOUCH_OFFSET=34;
@@ -4278,6 +5168,7 @@ const superHealBtn=document.getElementById('superHeal');
 if(superRageBtn)superRageBtn.addEventListener('click',function(){if(gameOver||(sandboxActive&&sandboxPaused))return;activateRage();});
 if(superHealBtn)superHealBtn.addEventListener('click',function(){if(gameOver||(sandboxActive&&sandboxPaused))return;activateHeal();});
 
+/* ==================== UI ==================== */
 const screens={};
 function initScreens(){
  const ids=['menuScreen','deckScreen','collectionScreen','shopScreen','customizeScreen','towerUpgradeScreen','tourScreen','clanScreen','onlineScreen','challengeScreen','eventScreen','modeScreen','questScreen','achScreen','bpScreen','statsScreen','settingsScreen','gameScreen','profileScreen','historyScreen','replayScreen','leaderboardScreen','sandboxScreen','trophyRoadScreen'];
@@ -4379,6 +5270,7 @@ function renderHistory(){
  el.appendChild(item);
  }
 }
+/* ==================== КЛАНЫ V2.5 · ЭТАП 28.5 ==================== */
 function clanStableHash(value){
  let h=2166136261;const text=String(value||'');
  for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619);}
@@ -4616,6 +5508,7 @@ function renderClanScreen(){
  const c=ensureClanV2(progression.clan);saveProgression();
  const banner=document.createElement('div');banner.className='clanBanner';
  banner.innerHTML='<div class="cIcon">🏰</div><div class="cInfo"><div class="cName">'+c.name+'</div><div class="cTag">#'+c.tag+'</div><div class="cCount">👥 '+(c.members.length+1)+' · 🏆 '+progression.trophies+' личных · ⭐ '+getClanRating(c)+' очков рейтинга</div></div>';el.appendChild(banner);
+ /* CARD DONATIONS */
  const eco=c.economy;const donatePanel=document.createElement('div');donatePanel.className='megaInfo';donatePanel.style.width='min(700px,100%)';
  donatePanel.innerHTML='<div class="mIcon">🤝</div><div class="mName">ОБМЕН КАРТАМИ В КЛАНЕ</div><div class="mDesc">Пожертвования уменьшают запас копий у тебя и дают монеты, XP и очки вклада. Оставляется минимум 1 копия каждой карты.</div><div style="font-size:12px;color:#ffd54f;font-weight:900;margin:6px">Сегодня: '+eco.donatedToday+'/8 копий · Всего передано: '+eco.donatedLifetime+' · Вклад: '+eco.contribution+' очк.</div>';
  const reqForm=document.createElement('div');reqForm.style.cssText='display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;margin:10px 0;width:100%;';
@@ -4647,6 +5540,7 @@ function renderClanScreen(){
  if(!eco.log.length){const empty=document.createElement('div');empty.className='mDesc';empty.textContent='Пока нет пожертвований или запросов.';donatePanel.appendChild(empty);}
  for(const item of eco.log.slice(0,5)){const line=document.createElement('div');line.style.cssText='font-size:10px;color:#a9bde5;text-align:left;padding:3px 0;';const card=item.cardId&&CARDS[item.cardId];line.textContent=(item.date||'')+' · '+(item.who||'Клан')+' '+(item.action||'операция')+(card?' '+card.name:'')+(item.count?' ×'+item.count:'')+(item.detail?' · '+item.detail:'');donatePanel.appendChild(line);}
  el.appendChild(donatePanel);
+ /* CLAN WAR: player's one real battle plus four locally simulated teammate matches */
  const war=c.war;const opponent=war.opponent||clanWarOpponentFor(c,war.id);
  const warBox=document.createElement('div');warBox.className='megaInfo';warBox.style.width='min(700px,100%)';
  warBox.innerHTML='<div class="mIcon">⚔️</div><div class="mName">КЛАНОВАЯ ВОЙНА · 5×5</div><div class="mDesc">Сыграй свою атаку обычным боем. После её завершения рассчитываются четыре поединка сокланов и общий счёт войны.</div><div style="font-size:13px;font-weight:900;color:#ffd54f;margin:8px">'+c.name+' против '+opponent.name+' · #'+opponent.tag+'</div><div style="font-size:14px;font-weight:900;color:#ffd54f;margin:7px">Текущий счёт: '+war.score+' : '+war.enemyScore+' · '+(war.completed?'война завершена':war.playerAttackUsed?'атака проведена':'атака доступна')+'</div><div style="font-size:11px;color:#9fb3d9">Один личный бой за цикл · цикл 3 дня · до обновления: '+getClanWarDaysLeft()+' дн.</div>';
@@ -4667,6 +5561,7 @@ function renderClanScreen(){
 
 function renderBpScreen(){
  checkSeasonReset();
+ if(cloudAvailable())walletRefresh(false).then(function(ok){if(ok)shopUiRefresh();});
  const seasonName=getSeasonName(),daysLeft=getSeasonDaysLeft();
  const hdr=document.getElementById('bpHeader');
  hdr.innerHTML='<div class="bpIcon">🎟️</div><div class="bpInfo"><div class="bpTitle">'+seasonName+'</div><div class="bpSub">Осталось: <b style="color:#ffd54f;">'+daysLeft+'</b> дн · '+(progression.bpPremiumPlus?'<span style="color:#ffd54f;">👑 ПРЕМИУМ+</span>':progression.bpPremium?'<span style="color:#ffd54f;">👑 ПРЕМИУМ</span>':'Бесплатная линия')+'</div></div><div class="bpLevel">'+progression.bpLevel+'<span style="font-size:14px;color:#7d94c4;">/'+BP_MAX_LEVEL+'</span></div>';
@@ -4675,12 +5570,12 @@ function renderBpScreen(){
  const ctrl=document.getElementById('bpControls');ctrl.innerHTML='';
  const badge=document.createElement('div');badge.style.cssText='padding:9px 12px;border-radius:10px;background:rgba(186,104,200,.15);border:1px solid #ba68c8;color:#e1bee7;font-weight:800;font-size:12px;';badge.textContent='⏳ '+daysLeft+' дн до конца сезона';ctrl.appendChild(badge);
  function addPassButton(label,price,active,tier){
-  const b=document.createElement('button');b.className='btn';b.textContent=active?'✓ '+label+' АКТИВЕН':label+' · '+price+' 🪙';b.disabled=active||progression.coins<price;
+  const b=document.createElement('button');b.className='btn';b.textContent=active?'✓ '+label+' АКТИВЕН':label+' · '+price+' ⭐';b.disabled=active||shop2.busy||!cloudAvailable();
   b.addEventListener('click',function(){sfx('click');purchaseBpPremium(tier);});ctrl.appendChild(b);
  }
- addPassButton('👑 ПРЕМИУМ',BP_PREMIUM_PRICE,progression.bpPremium,'premium');
- const plusPrice=progression.bpPremium?BP_PREMIUM_PLUS_PRICE-BP_PREMIUM_PRICE:BP_PREMIUM_PLUS_PRICE;
- addPassButton('💎 ПРЕМИУМ+',plusPrice,progression.bpPremiumPlus,'premiumPlus');
+ addPassButton('👑 ПРЕМИУМ',bpStarsPrice('premium'),progression.bpPremium,'premium');
+ addPassButton('💎 ПРЕМИУМ+',bpStarsPrice('plus'),progression.bpPremiumPlus,'premiumPlus');
+ if(!cloudAvailable()){const nb=document.createElement('div');nb.style.cssText='font-size:11px;color:#7d94c4;';nb.textContent='Премиум покупается за Stars внутри Telegram.';ctrl.appendChild(nb);}
  const tiers=document.getElementById('bpTiers');tiers.innerHTML='';
  const trackDefs=[{key:'free',name:'БЕСПЛАТНО',color:'#7ec97e',owned:true},{key:'premium',name:'👑 ПРЕМИУМ',color:'#ffd54f',owned:progression.bpPremium},{key:'plus',name:'💎 ПРЕМИУМ+',color:'#ce93d8',owned:progression.bpPremiumPlus}];
  const style='display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:64px;padding:5px 3px;border-radius:8px;border:1px solid #35476a;background:#111a2d;color:#e8efff;font-size:10px;font-weight:800;cursor:pointer;';
@@ -4713,7 +5608,7 @@ function renderStats(){
  const entries=Object.entries(s.favCards||{}).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
  if(entries.length===0){favWrap.innerHTML='<h3>ТОП КАРТ</h3><div style="color:#7d94c4;font-size:12px;">Сыграй бой.</div>';return;}
  let html='<h3>ТОП КАРТ</h3><div class="favList">';
- for(const e of entries){const c=CARDS[e[0]];if(!c)continue;html+='<div class="favItem"><div class="fiIcon">'+c.icon+'</div><div class="fiName">'+c.name+'</div><div class="fiCount">'+e[1]+'×</div></div>';}
+ for(const e of entries){const c=CARDS[e[0]];if(!c)continue;html+='<div class="favItem"><div class="fiIcon">'+cardIconHtml(c)+'</div><div class="fiName">'+c.name+'</div><div class="fiCount">'+e[1]+'×</div></div>';}
  html+='</div>';favWrap.innerHTML=html;
 }
 function renderSettings(){
@@ -4848,7 +5743,7 @@ function renderDeckBuilder(){
  const id=playerDeckIds[i];const slot=document.createElement('div');
  const evolved=id&&isEvolved(id);
  slot.className='slot'+(id?' filled':'')+(evolved?' evolved':'');
- if(id){const c=CARDS[id];let html='';if(evolved)html+='<div class="evo">✨</div>';html+='<div class="lvl">'+cardLevel(id)+'</div><div class="icon">'+c.icon+'</div><div class="cost">'+c.cost+'</div>';slot.innerHTML=html;slot.addEventListener('click',function(){sfx('click');playerDeckIds.splice(i,1);saveDeck();progression.deckSlots[progression.activeDeck]=playerDeckIds.slice();saveProgression();renderDeckBuilder();});}
+ if(id){const c=CARDS[id];let html='';if(evolved)html+='<div class="evo">✨</div>';html+='<div class="lvl">'+cardLevel(id)+'</div><div class="icon">'+cardIconHtml(c)+'</div><div class="cost">'+c.cost+'</div>';slot.innerHTML=html;slot.addEventListener('click',function(){sfx('click');playerDeckIds.splice(i,1);saveDeck();progression.deckSlots[progression.activeDeck]=playerDeckIds.slice();saveProgression();renderDeckBuilder();});}
  else slot.textContent='＋';
  slotsEl.appendChild(slot);
  }
@@ -4905,7 +5800,9 @@ function renderCollection(){
 }
 function renderShop(){
  refreshDailyCardShop();
+ if(cloudAvailable())walletRefresh(false).then(function(ok){if(ok)shopUiRefresh();});
  const el=document.getElementById('shopList');el.innerHTML='';
+ renderStarsBlock(el);
  const dItem=document.createElement('div');const avail=shopAvailable();
  dItem.className='shopItem'+(avail?' ready':' used');
  dItem.innerHTML='<div class="siInfo"><div class="siName">🎁 Ежедневная награда</div><div class="siDesc">'+(avail?'200 монет — копии карт теперь выдаются сундуками':'Забрано сегодня.')+'</div></div>';
@@ -4926,7 +5823,7 @@ function renderShop(){
  const c=CARDS[item.id];if(!c)return;
  const price=Math.round(item.basePrice*0.5);
  const it=document.createElement('div');it.className='shopItem dailyDeal'+(item.sold?' used':'');
- const preview=document.createElement('div');preview.className='cardPreview';preview.innerHTML=c.icon+'<div style="position:absolute;bottom:-4px;right:-4px;width:18px;height:18px;border-radius:50%;background:linear-gradient(180deg,#ff7ae0,#a020c0);border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;">'+c.cost+'</div>';
+ const preview=document.createElement('div');preview.className='cardPreview';preview.innerHTML=cardIconHtml(c)+'<div style="position:absolute;bottom:-4px;right:-4px;width:18px;height:18px;border-radius:50%;background:linear-gradient(180deg,#ff7ae0,#a020c0);border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;">'+c.cost+'</div>';
  it.appendChild(preview);
  const info=document.createElement('div');info.className='siInfo';
  info.innerHTML='<div class="siName">'+c.name+' <span style="color:#ba68c8;">ур.'+cardLevel(item.id)+'</span></div><div class="siDesc">Было '+item.basePrice+', скидка 50%</div><div class="siPrice"><span class="oldPrice">🪙'+item.basePrice+'</span>🪙'+price+'</div>';
@@ -4955,12 +5852,15 @@ function renderShop(){
  if(equipped){btn.textContent='СНЯТЬ';btn.addEventListener('click',function(){progression.skin='none';saveProgression();renderShop();});}
  else if(owned){btn.textContent='ВКЛ';btn.addEventListener('click',function(){progression.skin=s.id;saveProgression();sfx('click');renderShop();});}
  else{btn.textContent='КУПИТЬ 🪙'+s.price;btn.disabled=progression.coins<s.price;btn.addEventListener('click',function(){if(progression.coins<s.price)return;progression.coins-=s.price;progression.ownedSkins.push(s.id);progression.skin=s.id;saveProgression();sfx('chest');renderShop();updateMenuStats();});}
- it.appendChild(btn);el.appendChild(it);
+ it.appendChild(btn);
+ if(!owned&&cloudAvailable()&&gemPriceOf('arena',s.id)){const gp=gemPriceOf('arena',s.id);const gb=document.createElement('button');gb.className='siBtn';gb.style.marginLeft='6px';gb.textContent='💎 '+gp;gb.disabled=shop2.gems<gp||shop2.busy;gb.addEventListener('click',function(){gemsBuySkin('arena',s.id,s.name,gp);});it.appendChild(gb);}
+ el.appendChild(it);
  }
 }
 let customizeTab='arena';
 function renderCustomizeScreen(tab){
  if(tab)customizeTab=tab;
+ if(cloudAvailable())walletRefresh(false).then(function(ok){if(ok)shopUiRefresh();});
  const tabsEl=document.getElementById('customizeTabs'),content=document.getElementById('customizeContent'),summary=document.getElementById('customizeSummary'),coinsEl=document.getElementById('customizeCoins');
  if(!tabsEl||!content||!summary)return;
  tabsEl.innerHTML='';content.innerHTML='';if(coinsEl)coinsEl.textContent=progression.coins;
@@ -5009,7 +5909,9 @@ function renderCustomizeScreen(tab){
    if(customizeTab==='arena'&&!progression.ownedSkins.includes('none'))progression.ownedSkins.push('none');
    saveProgression();sfx(alreadyOwned?'click':'chest');initWeather();renderCustomizeScreen();updateMenuStats();
   });
-  card.appendChild(button);content.appendChild(card);
+  card.appendChild(button);
+   {const gp=(!has&&cloudAvailable())?gemPriceOf(customizeTab,item.id):0;if(gp){const gb=document.createElement('button');gb.type='button';gb.className='customizeAction';gb.textContent='💎 '+gp+' гемов';gb.disabled=shop2.gems<gp||shop2.busy;gb.addEventListener('click',function(){gemsBuySkin(customizeTab,item.id,item.name,gp);});card.appendChild(gb);}}
+   content.appendChild(card);
  }
 }
 
@@ -5056,6 +5958,7 @@ function renderTowerUpgradeScreen(){
  }
 }
 
+/* ==================== ЭТАП 30: ТРОПА ТРОФЕЕВ (экран) ==================== */
 function setRoadNotice(msg,tone){
  const el=document.getElementById('roadNotice');if(!el)return;
  el.textContent=msg||'';el.className='roadNotice'+(tone?' '+tone:'');el.style.display=msg?'':'none';
@@ -5092,7 +5995,7 @@ function makeRoadCardThumb(id){
  const c=CARDS[id],st=cardUpgradeState(id),lv=cardLevel(id);
  const d=document.createElement('button');d.type='button';
  d.className='roadCard '+c.rarity+(st==='locked'?' locked':'');
- let html='<div class="rcIcon">'+c.icon+'</div>';
+ let html='<div class="rcIcon">'+cardIconHtml(c)+'</div>';
  if(st==='locked')html+='<div class="rcLock">🔒</div>';
  else{
   html+='<div class="rcLv">'+lv+'</div>';
@@ -5126,7 +6029,7 @@ function showRoadCardInfo(id){
   }
  }
  sheet.innerHTML='<div class="big"></div><div class="nm"></div><div class="tx" style="color:#ffd54f;"></div><div class="tx" id="roadSheetTx"></div><div class="row"></div>';
- sheet.querySelector('.big').textContent=c.icon;
+ sheet.querySelector('.big').innerHTML=cardIconHtml(c);
  sheet.querySelector('.nm').textContent=c.name;
  sheet.querySelectorAll('.tx')[0].textContent=(RARITY_NAMES[c.rarity]||'')+' · ⚡ '+c.cost;
  document.getElementById('roadSheetTx').innerHTML=txt;
@@ -5269,6 +6172,7 @@ function openTrophyRoad(){
  setRoadNotice('');renderTrophyRoad(false);
 }
 
+/* ==================== ЭТАП 33: хабы с вкладками ==================== */
 function openStatsScreen(){initAudio();sfx('click');showScreen('stats');renderStats();}
 const HUB_TABS={
  profile:[{key:'profile',screen:'profileScreen',label:'👤 Профиль',btn:'profileBtn'},{key:'history',screen:'historyScreen',label:'📜 Бои',btn:'historyBtn'},{key:'replay',screen:'replayScreen',label:'🎬 Реплеи',btn:'replayBtn'},{key:'stats',screen:'statsScreen',label:'📊 Статистика',fn:openStatsScreen},{key:'customize',screen:'customizeScreen',label:'🎨 Оформление',btn:'customizeBtn'}],
@@ -5280,7 +6184,7 @@ const HUB_TABS={
 };
 function mountHubTabs(){
  Object.keys(HUB_TABS).forEach(function(hub){
-  const tabs=HUB_TABS[hub];
+  const tabs=HUB_TABS[hub].filter(function(t){return ONLINE_ENABLED||t.key!=='online';});
   tabs.forEach(function(t){
    const scr=document.getElementById(t.screen);if(!scr)return;
    const header=scr.querySelector('.screenHeader');if(!header)return;
@@ -5300,6 +6204,7 @@ function mountHubTabs(){
  });
 }
 
+/* ==================== ЭТАП 36: нижняя панель навигации ==================== */
 const NAV_OF_SCREEN={menu:'battle',trophyRoad:'battle',profile:'battle',history:'battle',replay:'battle',stats:'battle',customize:'battle',quest:'battle',ach:'battle',settings:'battle',deck:'cards',collection:'cards',towerUpgrade:'cards',shop:'shop',bp:'shop',clan:'social',online:'social',leaderboard:'social',event:'events',challenge:'events',tour:'events',mode:'events'};
 function navClick(id){const b=document.getElementById(id);if(b)b.click();}
 const NAV_TABS=[
@@ -5355,6 +6260,7 @@ function renderBattleHero(){
   +(claim?'<div class="heroBadge">'+claim+'</div>':'');
 }
 
+/* ==================== ЭТАП 38: короны за день, эмоции, обучение ==================== */
 const CROWN_SET_TARGET=10,CROWN_SET_CHEST='gold';
 function ensureCrownDay(){const t=todayStr();if(progression.crownDay!==t){progression.crownDay=t;progression.crownsToday=0;progression.crownSetClaimed=false;}}
 function addDailyCrowns(n){ensureCrownDay();const before=progression.crownsToday;progression.crownsToday=Math.min(CROWN_SET_TARGET,before+Math.max(0,n|0));return {before:before,after:progression.crownsToday};}
@@ -5373,6 +6279,7 @@ function renderCrownBar(){
  const b=document.getElementById('crownClaimBtn');if(b)b.addEventListener('click',function(){claimCrownSet();});
 }
 
+// --- эмоции ---
 const EMOTES=['👍','😂','😡','😎','😭','👏','🤔','😱'];
 const EMOTE_REPLY={'😂':['😂','🤔'],'😡':['😎','😡'],'👍':['👍'],'😎':['😎','🤔'],'😭':['👏'],'👏':['👍','😎'],'🤔':['🤔'],'😱':['😎']};
 const EMOTE_COOLDOWN_MS=2000;let emoteReadyAt=0;
@@ -5408,6 +6315,7 @@ function initEmotes(){
  document.addEventListener('click',function(){panel.classList.remove('open');toggle.setAttribute('aria-expanded','false');});
 }
 
+// --- обучение: первый бой с подсказками ---
 let tutBattle=null;
 const TUT_STEPS=[
  {title:'1. Выбери карту',text:'Нажми на карту внизу или перетащи её на поле. Число в кружке — цена в эликсире ⚡.',hl:'hand',done:function(){return selectedCard>=0||tutBattle.plays>0;}},
@@ -5443,6 +6351,7 @@ function tutorialTick(){
  if(st&&st.done&&st.done())tutAdvance();
 }
 
+/* ==================== ЭТАП 39: оболочка Telegram Mini App ==================== */
 const TG=(window.Telegram&&window.Telegram.WebApp)||null;
 let inTelegram=false;
 function tgDo(fn){try{return fn();}catch(e){}}
@@ -5469,11 +6378,13 @@ function applyTelegramInsets(){
 }
 function tgSyncScreen(name){
  if(!inTelegram)return;
+ // закрытие приложения во время боя требует подтверждения
  tgDo(function(){if(name==='game')TG.enableClosingConfirmation();else TG.disableClosingConfirmation();});
+ // системная кнопка «Назад» вместо нашей на подэкранах
  if(TG.BackButton)tgDo(function(){if(name==='menu'||name==='game')TG.BackButton.hide();else TG.BackButton.show();});
 }
 function initTelegramShell(){
- if(!TG||!TG.initData)return;
+ if(!TG||!TG.initData)return;           // обычный браузер: оболочка не нужна
  inTelegram=true;document.body.classList.add('inTelegram');
  tgDo(function(){TG.ready();});tgDo(function(){TG.expand();});
  // ЭТАП 42 · имя игрока из Telegram
@@ -5493,6 +6404,7 @@ function initTelegramShell(){
  tgSyncScreen('menu');
 }
 
+/* ==================== ЭТАП 40: вписывание арены в любой экран ==================== */
 function applyRenderScale(cssW){
  const dpr=Math.min(2,window.devicePixelRatio||1);
  const rs=Math.round(Math.min(2,Math.max(1,(cssW*dpr)/W))*4)/4;
@@ -5568,14 +6480,15 @@ function renderAchievements(){
   if(done&&!st.claimed&&!allClaimed)readyCount++;
   const item=document.createElement('div');
   item.className='achItem'+(done?' done':'')+(allClaimed?' claimed':'');
-  const tierLabel=allClaimed?'МАКС. СТУПЕНЬ':('СТУПЕНЬ '+a.tier+'/5');
-  const statusLabel=allClaimed?'✅ Все ступени получены':(done?'Цель достигнута — забери награду':'Следующая ступень откроется после получения текущей награды');
+  const tierLabel=allClaimed?'МАКС. РАНГ · АЛМАЗ':(a.tierName.toUpperCase()+' · '+a.tier+'/5');
+  const statusLabel=allClaimed?'✅ Все ранги получены':(done?'Цель достигнута — забери награду':'Следующий ранг откроется после получения награды');
   item.innerHTML='<div class="achIcon">'+a.icon+'</div><div class="achInfo"><div class="achName">'+base.name+'</div><div class="achDesc">'+a.desc+'</div><div style="font-size:10px;color:#ffd54f;margin:2px 0;font-weight:900;">'+tierLabel+'</div><div class="achBar"><div class="achBarFill'+(done?' done':'')+'" style="width:'+pct+'%"></div></div><div style="font-size:10px;color:#7d94c4;">'+Math.min(val,a.target)+' / '+a.target+'</div><div style="font-size:10px;color:'+(allClaimed?'#7ec97e':done?'#ffd54f':'#9fb3d9')+';margin-top:2px;">'+statusLabel+'</div></div>';
   const reward=document.createElement('div');reward.className='achReward';
   if(allClaimed){reward.innerHTML='<span style="color:#7ec97e;">✓</span>';}
   else if(done&&!st.claimed){
    const btn=document.createElement('button');btn.className='btn small';btn.textContent='ЗАБРАТЬ · 🪙'+a.reward;btn.style.cssText='font-size:10px;padding:6px 8px;white-space:normal;';
    btn.addEventListener('click',function(){
+    // Only the currently displayed tier can be collected. The same row then advances.
     const fresh=progression.achievements[a.id]||{claimed:false};
     const earlier=tiers.slice(0,a.tier-1).every(t=>progression.achievements[t.id]&&progression.achievements[t.id].claimed);
     if(fresh.claimed||!earlier||achStatValue(a.stat)<a.target)return;
@@ -5590,6 +6503,7 @@ function renderAchievements(){
  if(countEl)countEl.textContent=maxedCount+'/'+ACHIEVEMENT_BASE.length+' завершено'+(readyCount?' · '+readyCount+' готово к получению':'');
 }
 
+/* ==================== ОБУЧЕНИЕ ==================== */
 const TUTORIAL_STEPS=[
  {icon:'🎮',title:'ДОБРО ПОЖАЛОВАТЬ',text:'Arena Clash — игра про сражения картами. Ты разворачиваешь войска, они идут к башням врага.'},
  {icon:'⚡',title:'ЭЛИКСИР',text:'Внизу слева фиолетовая шкала — эликсир. Он копится сам. Каждая карта стоит эликсир.'},
@@ -5611,6 +6525,8 @@ function renderTutStep(){
 }
 function tutNext(){tutStep++;if(tutStep>=TUTORIAL_STEPS.length)closeTut();else renderTutStep();}
 function closeTut(){document.getElementById('tutorialOverlay').classList.remove('show');progression.tutorialDone=true;saveProgression();}
+
+/* ==================== ОБРАБОТЧИКИ ==================== */
 
 function replaceCoinGlyphs(root){
  if(!root||!document.createTreeWalker)return;
@@ -5649,7 +6565,7 @@ bind('sandboxSideBtn',function(){if(!sandboxActive)return;sandboxPlaceTeam=sandb
 bind('sandboxPickerClose',function(){const p=document.getElementById('sandboxPicker');if(p)p.style.display='none';sandboxPendingCardId=null;updateSandboxControls();});
 function refreshSandboxSetupInputs(){const i=document.getElementById('sandboxInfiniteToggle');if(i)i.checked=sandboxInfiniteElixir;const a=document.getElementById('sandboxAnyCardToggle');if(a)a.checked=sandboxAnyCardMode;const ai=document.getElementById('sandboxAiSelect');if(ai)ai.value=sandboxAIStyle;}
 
-bind('onlineBtn',function(){initAudio();sfx('click');eventActive=false;currentEvent=null;currentEventSlot=null;challengeActive=false;currentChallenge=null;showScreen('online');updateOnlineUI();});
+bind('onlineBtn',function(){if(!ONLINE_ENABLED){showScreen('menu');return;}initAudio();sfx('click');eventActive=false;currentEvent=null;currentEventSlot=null;challengeActive=false;currentChallenge=null;showScreen('online');updateOnlineUI();});
 bind('tourBtn',function(){initAudio();sfx('click');eventActive=false;currentEvent=null;currentEventSlot=null;challengeActive=false;currentChallenge=null;showScreen('tour');renderTourScreen();});
 bind('bpBtn',function(){initAudio();sfx('click');showScreen('bp');renderBpScreen();});
 bind('chalBtn',function(){initAudio();sfx('click');eventActive=false;currentEvent=null;currentEventSlot=null;showScreen('challenge');renderChallenge();});
@@ -5716,6 +6632,7 @@ const soundBtn=document.getElementById('soundBtn');
 function updateSoundBtn(){if(soundBtn){soundBtn.textContent=soundEnabled?'🔊':'🔇';soundBtn.setAttribute('aria-label',soundEnabled?'Выключить звук':'Включить звук');soundBtn.setAttribute('aria-pressed',String(soundEnabled));soundBtn.title=soundEnabled?'Звук включён':'Звук выключен';}}
 if(soundBtn)soundBtn.addEventListener('click',function(){initAudio();soundEnabled=!soundEnabled;progression.sound=soundEnabled;saveProgression();updateSoundBtn();if(soundEnabled)sfx('click');refreshMusic();});
 
+/* ==================== QA DEV TOOLS (only when ?devtest=1) ==================== */
 if(typeof location!=='undefined'&&new URLSearchParams(location.search).get('devtest')==='1'){
  window.__arenaClashDevTest={
   runRegressionChecks:function(){
@@ -5806,6 +6723,7 @@ if(typeof location!=='undefined'&&new URLSearchParams(location.search).get('devt
  };
 }
 
+/* ==================== ЦИКЛ · ЭТАП 29.1 ==================== */
 let lastT=performance.now();
 function loop(now){
  const dt=Math.min(0.05,(now-lastT)/1000);
@@ -5823,10 +6741,12 @@ function loop(now){
  requestAnimationFrame(loop);
 }
 
+/* ==================== СТАРТ ==================== */
 initScreens();
 initTelegramShell();initArenaFit();mountHubTabs();mountBottomNav();initEmotes();updateBottomNav('menu');updateNavBadges();setTimeout(migrateLegacyChests,400);
 soundEnabled=progression.sound!==false;
 updateSoundBtn();
+/* ЭТАП 17: проверка сброса сезона при запуске */
 const seasonReset=checkSeasonReset();
 if(seasonReset){
  setTimeout(function(){
@@ -5850,6 +6770,9 @@ friendsCache=loadFriends();renderFriends();
 if(!progression.tutorialDone)document.body.classList.add('newPlayer');
 if(typeof location!=='undefined'&&location.search.indexOf('room=')>=0)setTimeout(openInviteFromUrl,350);
 requestAnimationFrame(loop);
+if(cloudAvailable())setTimeout(cloudInitialSync,800);
+setTimeout(heroWarmup,400);
+setTimeout(warmGfx,600);
 window.addEventListener('pointerdown',initAudio,{once:true});
 
 document.addEventListener('DOMContentLoaded',function(){
